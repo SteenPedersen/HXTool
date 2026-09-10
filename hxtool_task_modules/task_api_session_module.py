@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # This is a system task module that performs the API logins needed by the task scheduler.
 
@@ -46,9 +45,9 @@ class task_api_session_module(task_module):
 		if hx_api_object is not None:
 			(ret, response_code, response_data) = hx_api_object.restLogin(username, password, auto_renew_token = True)
 			if ret:
-				self.logger.info("Successfully initialized task API session for host {} ({})".format(hx_api_object.hx_host, profile_id))
+				self.logger.info(f"Successfully initialized task API session for host {hx_api_object.hx_host} ({profile_id})")
 			else:
-				self.logger.warn("Failed to initialize task API session for host {} ({}). Response code: {}, response data: {}".format(hx_api_object.hx_host, profile_id, response_code, response_data))
+				self.logger.warning(f"Failed to initialize task API session for host {hx_api_object.hx_host} ({profile_id}). Response code: {response_code}, response data: {response_data}")
 				del self.parent_task.scheduler.task_hx_api_sessions[profile_id]
 			password = None
 			hx_api_object = None

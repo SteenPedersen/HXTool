@@ -11,6 +11,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>{% block title %}{% endblock %}</title>
 	<script type="text/javascript" src="{{ url_for('static', filename='js/jquery-3.6.0.min.js') }}"></script>
 	
@@ -34,9 +35,9 @@
 	<script type="text/javascript" src="/static/hxtool-js/hxtool-widgets.js"></script>
 	<link href="/static/fontawesome-free-5.7.2-web/css/all.css" rel="stylesheet">
 	<link href="/static/fe-fds/fds-dark.css" rel="stylesheet" />
-	<link rel="stylesheet" type="text/css" href="static/hxtool-css/hxtool-main.css">
-    <link rel="stylesheet" type="text/css" href="static/datetimepicker/daterangepicker.css">
-	<link rel="stylesheet" type="text/css" href="static/multi-select.css">
+	<link rel="stylesheet" type="text/css" href="/static/hxtool-css/hxtool-main.css?v=4">
+    <link rel="stylesheet" type="text/css" href="/static/datetimepicker/daterangepicker.css">
+	<link rel="stylesheet" type="text/css" href="/static/multi-select.css">
 	<link href="/static/favicon.ico" rel="icon" type="image/x-icon" />
 </head>
 <body>
@@ -93,7 +94,7 @@
 		}
 		
 		$(document).ready(function() {
-			$('#hx_name-placeholder').text("{{session['ht_hx_name']}}");
+			$('#hx_name-text').text("{{session['ht_hx_name']}}");
 			/* Hide menu items based on capabilities */
 			myDBEngine = "{{session['ht_database_engine']}}";
 			myHXModules = [];
@@ -120,12 +121,192 @@
 
 			hxtool_doc_ready();
 
+			// Font scale control — persisted in localStorage, applied to main content area
+			var HXTOOL_SCALE_KEY = 'hxtool_content_zoom';
+			var hxFontScaleMin = 0.7;
+			var hxFontScaleMax = 1.5;
+			var hxFontScaleStep = 0.1;
+			var hxCurrentScale = 1.0;
+
+			function hxApplyScale(scale) {
+				hxCurrentScale = Math.round(scale * 10) / 10;
+				var s = hxCurrentScale;
+				// Compensate height so the content area fills the full viewport even when zoomed.
+				// zoom: s shrinks layout by factor s, so divide CSS height by s to restore it.
+				$(".hxtool5_content").css({
+					'zoom': s,
+					'height': 'calc(100vh / ' + s + ')',
+					'max-height': 'calc((100vh - 60px) / ' + s + ')'
+				});
+				try { localStorage.setItem(HXTOOL_SCALE_KEY, hxCurrentScale); } catch(e) {}
+			}
+
+			try {
+				var hxSaved = parseFloat(localStorage.getItem(HXTOOL_SCALE_KEY));
+				if (hxSaved && hxSaved >= hxFontScaleMin && hxSaved <= hxFontScaleMax) {
+					hxApplyScale(hxSaved);
+				}
+			} catch(e) {}
+
+			$("#hxtoolFontIncrease").on('click', function() {
+				if (hxCurrentScale < hxFontScaleMax) hxApplyScale(hxCurrentScale + hxFontScaleStep);
+			});
+
+			$("#hxtoolFontDecrease").on('click', function() {
+				if (hxCurrentScale > hxFontScaleMin) hxApplyScale(hxCurrentScale - hxFontScaleStep);
+			});
+
+			// ── Controller switcher ─────────────────────────────────────────
+			var _htCurrentProfileId = "{{session['ht_profileid']}}";
+
+			// Pre-populate the dropdown once at page load.
+			// The existing hxtool_topnav_mainbutton handler in hxtool-doc-ready.js
+			// already handles showing/hiding the dropdown div.
+			(function htLoadControllerDropdown() {
+				var $dd = $('#hx_controller_dropdown');
+				$.ajax({
+					url: '/api/v1/profile',
+					method: 'GET',
+					success: function(raw) {
+						var resp, profiles;
+						try { resp = typeof raw === 'string' ? JSON.parse(raw) : raw; profiles = resp.data || []; } catch(e) { profiles = []; }
+						$dd.empty();
+						if (!profiles.length) {
+							$dd.html('<span style="padding:8px 16px; color:#888; font-size:13px; display:block;">No profiles found.</span>');
+							return;
+						}
+						profiles.forEach(function(p) {
+							var isCurrent = p.profile_id === _htCurrentProfileId;
+							var check = isCurrent
+								? '<i class="fas fa-check" style="margin-right:6px; font-size:11px; width:14px;"></i>'
+								: '<span style="display:inline-block; width:20px;"></span>';
+							$('<button>')
+								.addClass('ht-ctrl-profile-btn')
+								.attr('data-profile-id', p.profile_id)
+								.attr('data-profile-name', p.hx_name)
+								.html(check + $('<span>').text(p.hx_name).html())
+								.appendTo($dd);
+							$dd.append('<br>');
+						});
+					},
+					error: function() {
+						$dd.html('<span style="padding:8px 16px; color:#ea475b; font-size:13px; display:block;">Failed to load profiles.</span>');
+					}
+				});
+			})();
+
+			// Profile button clicks — delegated so they work after dynamic insertion
+			$(document).on('click', '.ht-ctrl-profile-btn', function(e) {
+				e.stopPropagation();
+				$('#hx_controller_dropdown').hide();
+				var pid = $(this).attr('data-profile-id');
+				var pname = $(this).attr('data-profile-name');
+				if (pid === _htCurrentProfileId) return;
+				htSwitchController(pid, pname);
+			});
+
+			function htSwitchController(profile_id, hx_name) {
+				$.ajax({
+					url: '/api/v1/profile/' + profile_id + '/credential',
+					method: 'GET',
+					success: function(raw) {
+						var result;
+						try { result = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch(e) { result = {}; }
+						if (result.has_credential) {
+							htAutoSwitch(profile_id);
+						} else {
+							htShowSwitchLoginModal(profile_id, hx_name);
+						}
+					},
+					error: function() {
+						if (typeof showHtBanner === 'function') showHtBanner('Failed to check credentials.');
+					}
+				});
+			}
+
+			function htAutoSwitch(profile_id) {
+				$.ajax({
+					url: '/api/v1/profile/' + profile_id + '/switch',
+					method: 'POST',
+					headers: {'X-Requested-With': 'XMLHttpRequest'},
+					success: function(raw) {
+						var result;
+						try { result = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch(e) { result = {}; }
+						if (result.success) {
+							window.location.reload();
+						} else {
+							if (typeof showHtBanner === 'function') showHtBanner(result.message || 'Switch failed.');
+						}
+					},
+					error: function(xhr) {
+						var result = {};
+						try { result = JSON.parse(xhr.responseText); } catch(e) {}
+						if (typeof showHtBanner === 'function') showHtBanner(result.message || 'Switch failed.');
+					}
+				});
+			}
+
+			function htShowSwitchLoginModal(profile_id, hx_name) {
+				$('#htSwitchModalProfileId').val(profile_id);
+				$('#htSwitchModalTitle').text('Login to ' + hx_name);
+				$('#htSwitchModalError').hide().text('');
+				$('#htSwitchModalUser').val('');
+				$('#htSwitchModalPass').val('');
+				$('#htSwitchModal').show();
+				setTimeout(function() { $('#htSwitchModalUser').focus(); }, 50);
+			}
+
+			$('#htSwitchModalCancel').on('click', function() {
+				$('#htSwitchModal').hide();
+			});
+
+			$('#htSwitchModal').on('keydown', function(e) {
+				if (e.key === 'Escape') $('#htSwitchModal').hide();
+				if (e.key === 'Enter') $('#htSwitchModalSubmit').click();
+			});
+
+			$('#htSwitchModalSubmit').on('click', function() {
+				var profile_id = $('#htSwitchModalProfileId').val();
+				var user = $('#htSwitchModalUser').val().trim();
+				var pass = $('#htSwitchModalPass').val();
+				if (!user) {
+					$('#htSwitchModalError').text('Username is required.').show();
+					return;
+				}
+				$('#htSwitchModalError').hide();
+				$('#htSwitchModalSubmit').prop('disabled', true).text('Logging in…');
+				$.ajax({
+					type: 'POST',
+					url: '/login',
+					headers: {'X-Requested-With': 'XMLHttpRequest'},
+					data: {ht_user: user, ht_pass: pass, controllerProfileDropdown: profile_id},
+					dataType: 'json',
+					timeout: 22000,
+					success: function(r) {
+						window.location.href = r.redirect || '/';
+					},
+					error: function(xhr, status) {
+						$('#htSwitchModalSubmit').prop('disabled', false).text('Login');
+						var msg;
+						if (status === 'timeout') {
+							msg = 'Connection timed out.';
+						} else if (xhr.responseJSON && xhr.responseJSON.message) {
+							msg = xhr.responseJSON.message;
+						} else {
+							msg = 'Login failed. (' + (status || xhr.status) + ')';
+						}
+						$('#htSwitchModalError').text(msg).show();
+					}
+				});
+			});
+			// ── End controller switcher ─────────────────────────────────────
+
 		});
 	</script>
 	</body>
 
 
-<div class="hxtool5_container container">
+<div class="hxtool5_container container-fluid">
   <div class="row">
     <div class="col-12">
 
@@ -133,7 +314,7 @@
 	<header class="fe-top-nav fe-top-nav__topnav">
 		<div class="fe-top-nav__title fe-top-nav__bookend--left fe-top-nav__bookend">
 			<a class="fe-top-nav__home" routerlink="/">
-				<div class="fe-top-nav__title-brand">FireEye<sup>®</sup></div>
+				<div class="fe-top-nav__title-brand">Trellix<sup>®</sup></div>
 				<div class="fe-top-nav__title-name">HXTool</div>
 			</a>
 		</div>
@@ -166,6 +347,7 @@
 					<div class='hxtool_topnav_dropdown'>
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/search'>OpenIOC search</button><br>
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/openioc'>Manage OpenIOC indicators</button><br>
+						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/hunt'>IOC Hunt</button><br>
 					</div>
 				</li>
 				<li class="fe-top-nav__bar-nav-items">
@@ -197,6 +379,7 @@
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/rtioc'>build rule</button><br>
 						<!--<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/indicatorqueue'>rule queue</button><br>-->
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/indicators'>manage rules</button><br>
+						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/indicators#catalog'>local rules catalog</button><br>
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/categories'>manage rule categories</button><br>
 						<label class='hxtool_topnav_dropdown_divider fe-label' id='topnav_iocstreaming_label'>Streaming</label><br>
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/streaming_indicators' id='topnav_iocstreaming'>manage streaming rules</button><br>
@@ -212,10 +395,16 @@
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/channels'>custom configuration channels</button><br>
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/scheduler'>scheduler</button><br>
 						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/settings'>hxtool settings</button><br>
+						<button class='hxtool_topnav_dropdown_child fe-btn fe-btn--lg fe-btn--primary-link' data-link='/settings#hunt-settings-panel'>IOC Hunt settings</button><br>
 					</div>
 				</li>
 				<li class="fe-top-nav__bar-nav-items" id="fe-top-nav__bar-right-item">
-						<span class="hxtool_topnav_mainbutton fe-btn--lg" id="hx_name-placeholder"></span>
+					<button class="hxtool_topnav_mainbutton fe-btn fe-btn--lg fe-btn--primary-link" id="hx_name-placeholder" aria-label="Switch controller">
+						<i class="fas fa-server" aria-hidden="true"></i>
+						<span id="hx_name-text"></span>
+						<i class="fas fa-chevron-down" style="margin-left:4px;"></i>
+					</button>
+					<div class="hxtool_topnav_dropdown" id="hx_controller_dropdown" style="display:none; min-width:200px;"></div>
 				</li>
 			</ul>
 		</nav>
@@ -224,6 +413,8 @@
 				<input type="text" id="hxtool_global_search" value="" class="fe-input" style="width: 180px;" placeholder="search for a host" />
 			</div>
 			<div class='hxtool_topnav_right_container-right'>
+				<a aria-label="decrease font size" id="hxtoolFontDecrease" class="fe-top-nav__action-item" role="button" tabindex="0" title="Decrease font size" style="cursor:pointer; font-weight:bold; font-size:15px; user-select:none;">A&#8209;</a>
+				<a aria-label="increase font size" id="hxtoolFontIncrease" class="fe-top-nav__action-item" role="button" tabindex="0" title="Increase font size" style="cursor:pointer; font-weight:bold; font-size:15px; user-select:none;">A+</a>
 				<a aria-label="search in topnav" id="hxtool_topnavSearch" class="fe-top-nav__action-item" data-clicked='false' role="button" tabindex="0" aria-expanded="false">
 					<i class="fe-icon--center fas fa-search fa-2x"></i>
 				</a>
@@ -268,6 +459,27 @@
 
 
 
+
+	<!-- Controller switch login modal -->
+	<div id="htSwitchModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; background:rgba(0,0,0,0.5);">
+		<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#1e2a38; border:1px solid #2d3f52; border-radius:6px; width:360px; padding:24px;">
+			<h4 id="htSwitchModalTitle" style="margin:0 0 16px; color:#e0e6ed; font-size:15px; font-weight:600;"></h4>
+			<p id="htSwitchModalError" style="display:none; color:#ea475b; font-size:13px; margin-bottom:12px;"></p>
+			<input type="hidden" id="htSwitchModalProfileId" value="">
+			<div style="margin-bottom:12px;">
+				<label style="display:block; color:#a0aab4; font-size:12px; margin-bottom:4px;">Username</label>
+				<input type="text" id="htSwitchModalUser" class="fe-input" style="width:100%; box-sizing:border-box;" autocomplete="username">
+			</div>
+			<div style="margin-bottom:20px;">
+				<label style="display:block; color:#a0aab4; font-size:12px; margin-bottom:4px;">Password</label>
+				<input type="password" id="htSwitchModalPass" class="fe-input" style="width:100%; box-sizing:border-box;" autocomplete="current-password">
+			</div>
+			<div style="display:flex; gap:8px; justify-content:flex-end;">
+				<button class="fe-btn fe-btn--md fe-btn--secondary" id="htSwitchModalCancel">Cancel</button>
+				<button class="fe-btn fe-btn--md fe-btn--primary" id="htSwitchModalSubmit">Login</button>
+			</div>
+		</div>
+	</div>
 
 	<!-- Main placeholder -->
 	{% block content %}{% endblock %}

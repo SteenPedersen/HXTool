@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 ##########################
 ### HX REST functions
@@ -11,7 +10,7 @@ try:
 	import requests
 	from requests.packages.urllib3.exceptions import InsecureRequestWarning
 except ImportError:
-	print("HXTool requires the 'requests' module, please install it.")
+	import sys; sys.stderr.write("HXTool requires the 'requests' module, please install it.\n")
 	exit(1)
 	
 import urllib
@@ -27,7 +26,7 @@ class HXAPI:
 	HX_MIN_API_VERSION = 2
 	DEFAULT_LIMIT = 100000
 	
-	def __init__(self, hx_host, hx_port = HX_DEFAULT_PORT, headers = None, cookies = None, proxies = None, disable_certificate_verification = True, logger_name = None, default_encoding = 'utf-8'):
+	def __init__(self, hx_host, hx_port = HX_DEFAULT_PORT, headers = None, cookies = None, proxies = None, disable_certificate_verification = True, logger_name = None, default_encoding = 'utf-8', connect_timeout = 10, read_timeout = 60):
 		if logger_name:
 			self.logger = logging.getLogger(logger_name)
 		else:
@@ -39,6 +38,8 @@ class HXAPI:
 		self.logger.debug('hx_host set to %s.', self.hx_host)
 		self.hx_port = hx_port
 		self.logger.debug('hx_port set to %s.', self.hx_port)
+		self._timeout = (connect_timeout, read_timeout)
+		self.logger.debug('Request timeout set to connect=%ss read=%ss.', connect_timeout, read_timeout)
 		
 		self._session = requests.Session()
 		
@@ -49,7 +50,7 @@ class HXAPI:
 					pac_url = proxies.get('pac_url', None)
 					self._session = PACSession(get_pac(pac_url))
 				except ImportError as e:
-					print(e)
+					self.logger.error(e)
 					self.logger.error("PAC support requested by configuration but pypac is not installed. Please install it if you'd like to use PAC files for proxy support")
 			elif 'https' in proxies:
 				self._session.proxies = proxies
@@ -104,6 +105,8 @@ class HXAPI:
 		if 'logger' in d.keys():
 			d['logger'] = logging.getLogger(d['logger'])
 		self.__dict__.update(d)
+		if not hasattr(self, '_timeout'):
+			self._timeout = (10, 60)
 		if not self._session.verify:
 			self.suppress_requests_insecure_warning()	
 
@@ -112,7 +115,7 @@ class HXAPI:
 		
 	def build_request(self, url, method = 'GET', params = None, data = None, content_type = 'application/json', accept = 'application/json', auth = None):
 	
-		full_url = "https://{0}:{1}{2}".format(self.hx_host, self.hx_port, url)
+		full_url = f"https://{self.hx_host}:{self.hx_port}{url}"
 		
 		self.logger.debug('Creating request.')
 		request = requests.Request(method = method, url = full_url, params = params, data = data, auth = auth)
@@ -141,10 +144,10 @@ class HXAPI:
 	def build_api_route(self, api_endpoint, min_api_version = None):
 		if not min_api_version:
 			min_api_version = self.api_version
-		return '/hx/api/v{0}/{1}'.format(min_api_version, api_endpoint)
+		return f'/hx/api/v{min_api_version}/{api_endpoint}'
 
 	def build_module_api_route(self, module_name, api_endpoint, min_api_version):
-		return '/hx/api/plugins/{0}/v{1}/{2}'.format(module_name, min_api_version, api_endpoint)
+		return f'/hx/api/plugins/{module_name}/v{min_api_version}/{api_endpoint}'
 		
 	def handle_response(self, request, multiline_json = False, multiline_json_limit = DEFAULT_LIMIT, stream = False):
 		
@@ -153,7 +156,7 @@ class HXAPI:
 		
 		try:
 			self.logger.debug("Sending request, awaiting response")
-			response = self._session.send(request, stream = stream)
+			response = self._session.send(request, stream = stream, timeout = self._timeout)
 			self.logger.debug("Have response.")
 
 			if not response.ok:
@@ -188,7 +191,7 @@ class HXAPI:
 					self.logger.info("Possible JSON in response without corresponding Content-Type header.")
 					
 			return(True, response.status_code, response_data, response.headers)	
-		except (requests.exceptions.ChunkedEncodingError, requests.HTTPError, requests.ConnectionError) as e:
+		except (requests.exceptions.ChunkedEncodingError, requests.HTTPError, requests.ConnectionError, requests.exceptions.Timeout) as e:
 			if hasattr(e, 'response') and e.response is not None:
 				# If we get a 401, invalidate the token forcing a re-login
 				if response.status_code == 401:
@@ -398,7 +401,7 @@ class HXAPI:
 										  min_api_version=self.STREAMING_MODULE_API_VER,
 										  api_endpoint=api_endpoint)
 		if indicator_id:
-			uri += '/{0}'.format(indicator_id)
+			uri += f'/{indicator_id}'
 		return uri
 
 	# Add a new streaming indicator
@@ -461,12 +464,12 @@ class HXAPI:
 	def restDeleteConditionFromStreamingIndicator(self, indicator_category, ioc_id, condition_id):
 		
 		# detach the condition from the indicator
-		request = self.build_request(self.buildStreamingIndicatorURI(indicator_id=ioc_id) + '/conditions/{0}'.format(condition_id), method = 'DELETE')
+		request = self.build_request(self.buildStreamingIndicatorURI(indicator_id=ioc_id) + f'/conditions/{condition_id}', method = 'DELETE')
 		(ret, response_code, response_data, _) = self.handle_response(request)
 
 		# delete the condition
 		if ret:
-			request = self.build_request(self.buildStreamingIndicatorURI(api_endpoint='conditions') + '/{0}'.format(condition_id), method = 'DELETE')
+			request = self.build_request(self.buildStreamingIndicatorURI(api_endpoint='conditions') + f'/{condition_id}', method = 'DELETE')
 			(ret, response_code, response_data, _) = self.handle_response(request)
 
 		return(ret, response_code, response_data)
@@ -479,10 +482,10 @@ class HXAPI:
 			myConditions = response_data['data']['entries']
 			for condition in myConditions:
 				condition_id = condition['id']
-				self.logger.debug('Deleting condition {0} from indicator {1}'.format(condition_id, ioc_id))
+				self.logger.debug(f'Deleting condition {condition_id} from indicator {ioc_id}')
 				(ret_2, response_code, response_data) = self.restDeleteConditionFromStreamingIndicator('', ioc_id=ioc_id, condition_id=condition_id)
 				if not ret_2:
-					self.logger.error('Deleting condition {0} from indicator {1} yielded error [{2}] with reason [{3}]'.format(condition_id, ioc_id, response_code, response_data))
+					self.logger.error(f'Deleting condition {condition_id} from indicator {ioc_id} yielded error [{response_code}] with reason [{response_data}]')
 					ret = ret_2
 
 		return(ret, response_code, response_data)
@@ -515,7 +518,7 @@ class HXAPI:
 	# Submit a new category
 	def restCreateCategory(self, category_name, category_options = {}):
 
-		request = self.build_request(self.build_api_route('indicator_categories/{0}'.format(category_name)), method = 'PUT', data = json.dumps(category_options))
+		request = self.build_request(self.build_api_route(f'indicator_categories/{category_name}'), method = 'PUT', data = json.dumps(category_options))
 		request.headers['If-None-Match'] = '*'
 		
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
@@ -557,7 +560,7 @@ class HXAPI:
 		if description:
 			data['description'] = description
 		
-		request = self.build_request(self.build_api_route('indicators/{0}'.format(ioc_category)), method = 'POST', data = json.dumps(data))
+		request = self.build_request(self.build_api_route(f'indicators/{ioc_category}'), method = 'POST', data = json.dumps(data))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)	
@@ -565,15 +568,73 @@ class HXAPI:
 	# Delete an indicator by name
 	def restDeleteIndicator(self, indicator_category, indicator_name):
 		
-		request = self.build_request(self.build_api_route('indicators/{0}/{1}'.format(indicator_category, indicator_name)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f'indicators/{indicator_category}/{indicator_name}'), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 
+	# Get a single indicator by category and URI name
+	def restGetIndicator(self, ioc_category, ioc_uri):
+		request = self.build_request(self.build_api_route(f'indicators/{ioc_category}/{ioc_uri}'))
+		(ret, response_code, response_data, response_headers) = self.handle_response(request)
+		return (ret, response_code, response_data)
+
+	def restCheckUserPermissions(self):
+		"""
+		Probe effective HX API permissions by making lightweight read calls.
+		Returns a dict of {label: (ok, http_code)}.
+		"""
+		results = {}
+
+		# Probe: list hosts (any authenticated user)
+		req = self.build_request(self.build_api_route('hosts'), params={'limit': 1})
+		(ret, code, _, _) = self.handle_response(req)
+		results['List hosts'] = (ret, code)
+
+		# Probe: list all indicators (any authenticated user)
+		req = self.build_request(self.build_api_route('indicators'), params={'limit': 5})
+		(ret, code, data, _) = self.handle_response(req)
+		results['List indicators'] = (ret, code)
+
+		# Probe: read indicator conditions — the definitive test for api_admin / api_analyst.
+		# Grab the first available indicator from the list and try to read its conditions.
+		cond_ret, cond_code = None, None
+		if ret and isinstance(data, dict):
+			for entry in (data.get('data') or {}).get('entries', []):
+				cat = (entry.get('category') or {}).get('uri_name', '')
+				uri = entry.get('uri_name', '')
+				if cat and uri:
+					req = self.build_request(
+						self.build_api_route(f'indicators/{cat}/{uri}/conditions/presence'),
+						params={'limit': 1}
+					)
+					(cond_ret, cond_code, _, _) = self.handle_response(req)
+					break
+		if cond_ret is not None:
+			results['Read indicator conditions'] = (cond_ret, cond_code)
+
+		# Probe: list enterprise searches (api_analyst or api_admin)
+		req = self.build_request(self.build_api_route('searches'), params={'limit': 1})
+		(ret, code, _, _) = self.handle_response(req)
+		results['Enterprise search'] = (ret, code)
+
+		# Probe: list bulk acquisitions (api_analyst or api_admin)
+		req = self.build_request(self.build_api_route('acqs/bulk'), params={'limit': 1})
+		(ret, code, _, _) = self.handle_response(req)
+		results['Bulk acquisitions'] = (ret, code)
+
+		# Probe: list agent config channels — api_admin only (Agent Configurations capability).
+		# api_analyst gets 403. This endpoint is confirmed in the HX capability matrix.
+		req = self.build_request(self.build_api_route('host_policies/channels'), params={'limit': 1})
+		(ret, code, _, _) = self.handle_response(req)
+		results['Administrator access'] = (ret, code)
+
+		return results
+
 	# Delete a category
 	def restDeleteCategory(self, indicator_category):
 		
-		request = self.build_request(self.build_api_route('indicator_categories/{0}'.format(indicator_category)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f'indicator_categories/{indicator_category}'), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -601,7 +662,7 @@ class HXAPI:
 	# Add a new condition
 	def restAddCondition(self, ioc_category, ioc_guid, condition_class, condition_data):
 
-		request = self.build_request(self.build_api_route('indicators/{0}/{1}/conditions/{2}'.format(ioc_category, ioc_guid, condition_class)), method = 'POST', data = condition_data)
+		request = self.build_request(self.build_api_route(f'indicators/{ioc_category}/{ioc_guid}/conditions/{condition_class}'), method = 'POST', data = condition_data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -610,14 +671,14 @@ class HXAPI:
 	# NOTE: limit for conditions is hard capped at 10000
 	def restGetCondition(self, ioc_category, ioc_uri, condition_class, limit=10000):
 
-		request = self.build_request(self.build_api_route('indicators/{0}/{1}/conditions/{2}?limit={3}'.format(ioc_category, ioc_uri, condition_class, limit)))
+		request = self.build_request(self.build_api_route(f'indicators/{ioc_category}/{ioc_uri}/conditions/{condition_class}?limit={limit}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 
 	def restDeleteCondition(self, ioc_category, ioc_uri, condition_class, condition_uuid):
 
-		request = self.build_request(self.build_api_route('indicators/{0}/{1}/conditions/{2}/{3}'.format(ioc_category, ioc_uri, condition_class, condition_uuid)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f'indicators/{ioc_category}/{ioc_uri}/conditions/{condition_class}/{condition_uuid}'), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 
 		return(ret, response_code, response_data)
@@ -625,7 +686,7 @@ class HXAPI:
 	# Get indicator based on condition
 	def restGetIndicatorFromCondition(self, condition_id):
 
-		request = self.build_request(self.build_api_route('conditions/{0}/indicators'.format(condition_id)))
+		request = self.build_request(self.build_api_route(f'conditions/{condition_id}/indicators'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -633,7 +694,7 @@ class HXAPI:
 
 	def restGetConditionDetails(self, condition_id):
 	
-		request = self.build_request(self.build_api_route('conditions/{0}'.format(condition_id)))
+		request = self.build_request(self.build_api_route(f'conditions/{condition_id}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -663,7 +724,7 @@ class HXAPI:
 		if timestamp:
 			data = json.dumps({'req_timestamp' : timestamp})
 			
-		request = self.build_request(self.build_api_route('hosts/{0}/triages'.format(agent_id)), method = 'POST', data = data)
+		request = self.build_request(self.build_api_route(f'hosts/{agent_id}/triages'), method = 'POST', data = data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -676,7 +737,7 @@ class HXAPI:
 	
 		data = json.dumps({'req_path' : path, 'req_filename' : filename, 'req_use_api' : mode})
 		
-		request = self.build_request(self.build_api_route('hosts/{0}/files'.format(agent_id)), method = 'POST', data = data)
+		request = self.build_request(self.build_api_route(f'hosts/{agent_id}/files'), method = 'POST', data = data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -688,7 +749,7 @@ class HXAPI:
 
 		data = json.dumps({'name' : scriptname, 'script' : {'b64' : script}})
 		
-		request = self.build_request(self.build_api_route('hosts/{0}/live'.format(agent_id)), method = 'POST', data = data)
+		request = self.build_request(self.build_api_route(f'hosts/{agent_id}/live'), method = 'POST', data = data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -698,7 +759,7 @@ class HXAPI:
 
 		data = None
 		
-		request = self.build_request(self.build_api_route('acqs/files/{0}'.format(acq_id)), method = 'GET', data = data)
+		request = self.build_request(self.build_api_route(f'acqs/files/{acq_id}'), method = 'GET', data = data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -708,7 +769,7 @@ class HXAPI:
 
 		data = None
 		
-		request = self.build_request(self.build_api_route('acqs/live/{0}'.format(acq_id)), method = 'GET', data = data)
+		request = self.build_request(self.build_api_route(f'acqs/live/{acq_id}'), method = 'GET', data = data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -718,7 +779,7 @@ class HXAPI:
 
 		data = None
 		
-		request = self.build_request(self.build_api_route('acqs/live/{0}.mans'.format(acq_id)), method = 'GET', data = data)
+		request = self.build_request(self.build_api_route(f'acqs/live/{acq_id}.mans'), method = 'GET', data = data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -745,7 +806,7 @@ class HXAPI:
 	# List hosts in Bulk acquisition
 	def restListBulkHosts(self, bulk_id, limit=DEFAULT_LIMIT, offset=0, sort_term = {}, filter_term = {}):
 		
-		endpoint_url = "acqs/bulk/{0}/hosts".format(bulk_id)
+		endpoint_url = f"acqs/bulk/{bulk_id}/hosts"
 		params = {
 			'limit' : limit,
 			'offset' : offset
@@ -763,7 +824,7 @@ class HXAPI:
 	# Get the status of a bulk acquisition for a single host	
 	def restGetBulkHost(self, bulk_id, host_id):
 
-		request = self.build_request(self.build_api_route('acqs/bulk/{0}/hosts/{1}'.format(bulk_id, host_id)))
+		request = self.build_request(self.build_api_route(f'acqs/bulk/{bulk_id}/hosts/{host_id}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -771,7 +832,7 @@ class HXAPI:
 	# Get Bulk acquistion detail
 	def restGetBulkDetails(self, bulk_id):
 
-		request = self.build_request(self.build_api_route('acqs/bulk/{0}'.format(bulk_id)))
+		request = self.build_request(self.build_api_route(f'acqs/bulk/{bulk_id}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -830,7 +891,7 @@ class HXAPI:
 		
 	def restRefreshBulkAcq(self, bulk_acquisition_id, state = "ALL"):
 		
-		request = self.build_request(self.build_api_route('acqs/bulk/{0}/actions/refresh?state={1}'.format(bulk_acquisition_id, state)), method = 'POST')
+		request = self.build_request(self.build_api_route(f'acqs/bulk/{bulk_acquisition_id}/actions/refresh?state={state}'), method = 'POST')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -845,21 +906,21 @@ class HXAPI:
 
 	def restListFileAcquisitionsHost(self, host_id):
 
-		request = self.build_request(self.build_api_route('hosts/{0}/files'.format(host_id)))
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/files'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 
 	def restListTriageAcquisitionsHost(self, host_id):
 
-		request = self.build_request(self.build_api_route('hosts/{0}/triages'.format(host_id)))
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/triages'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 
 	def restListDataAcquisitionsHost(self, host_id):
 
-		request = self.build_request(self.build_api_route('hosts/{0}/live'.format(host_id)))
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/live'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -964,30 +1025,41 @@ class HXAPI:
 		
 		return(ret, response_code, response_data)
 
+	def restSubmitQuerySearch(self, query, host_set, displayname=None):
+		data = {
+			'host_set': {'_id': int(host_set)},
+			'query': query,
+		}
+		if displayname:
+			data['displayname'] = displayname
+		request = self.build_request(self.build_api_route('searches'), method='POST', data=json.dumps(data))
+		(ret, response_code, response_data, response_headers) = self.handle_response(request)
+		return (ret, response_code, response_data)
+
 	def restCancelJob(self, path, id):
 
-		request = self.build_request(self.build_api_route('{0}/{1}/actions/stop'.format(path, id)), method = 'POST')
+		request = self.build_request(self.build_api_route(f'{path}/{id}/actions/stop'), method = 'POST')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 
 	def restDeleteJob(self, path, id):
 
-		request = self.build_request(self.build_api_route('{0}/{1}'.format(path, id)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f'{path}/{id}'), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 		
 	def restGetSearchHosts(self, search_id):
 
-		request = self.build_request(self.build_api_route('searches/{0}/hosts?errors=true'.format(search_id)))
+		request = self.build_request(self.build_api_route(f'searches/{search_id}/hosts?errors=true'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 
 	def restGetSearchResults(self, search_id, limit=DEFAULT_LIMIT):
 
-		request = self.build_request(self.build_api_route('searches/{0}/results?limit={1}'.format(search_id, limit)))
+		request = self.build_request(self.build_api_route(f'searches/{search_id}/results?limit={limit}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -999,7 +1071,7 @@ class HXAPI:
 
 	def restGetAlertID(self, alert_id):
 
-		request = self.build_request(self.build_api_route('alerts/{0}'.format(alert_id)))
+		request = self.build_request(self.build_api_route(f'alerts/{alert_id}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -1044,8 +1116,8 @@ class HXAPI:
 	def restGetAlertsTime(self, start_date, end_date, limit = DEFAULT_LIMIT, filters=False):
 
 		myquery = {'event_at' : 
-							{'min' : '{0}T00:00:00.000Z'.format(start_date), 
-							'max' : '{0}T23:59:59.999Z'.format(end_date)}
+							{'min' : f'{start_date}T00:00:00.000Z', 
+							'max' : f'{end_date}T23:59:59.999Z'}
 						}
 		# Filters is a dict
 		if filters:
@@ -1088,7 +1160,7 @@ class HXAPI:
 			
 			return(ret, response_code, response_data)
 		else:
-			raise NotImplementedError("This API call requires FireEye Endpoint Security version 5.0 and above.")
+			raise NotImplementedError("This API call requires Trellix Endpoint Security version 5.0 and above.")
 
 
 	########
@@ -1116,21 +1188,21 @@ class HXAPI:
 		
 	def restDeleteHostByID(self, agent_id):
 		
-		request = self.build_request(self.build_api_route('hosts/{0}'.format(agent_id)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f'hosts/{agent_id}'), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 		
 	def restGetHostSummary(self, host_id):
 
-		request = self.build_request(self.build_api_route('hosts/{0}'.format(host_id)))
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 		
 	def restGetHostSysinfo(self, host_id):
 
-		request = self.build_request(self.build_api_route('hosts/{0}/sysinfo'.format(host_id)))
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/sysinfo'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -1138,14 +1210,14 @@ class HXAPI:
 
 	def restGetContainmentStatus(self, host_id):
 	
-		request = self.build_request(self.build_api_route('hosts/{0}/containment'.format(host_id)))
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/containment'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 	
 	def restRequestContainment(self, host_id):
 	
-		request = self.build_request(self.build_api_route('hosts/{0}/containment'.format(host_id)), method = 'POST')
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/containment'), method = 'POST')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -1154,14 +1226,14 @@ class HXAPI:
 	
 		data = json.dumps({'state' : 'contain'})
 	
-		request = self.build_request(self.build_api_route('hosts/{0}/containment'.format(host_id)), method = 'PATCH', data = data)
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/containment'), method = 'PATCH', data = data)
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 
 	def restRemoveContainment(self, host_id):
 	
-		request = self.build_request(self.build_api_route('hosts/{0}/containment'.format(host_id)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f'hosts/{host_id}/containment'), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -1190,7 +1262,7 @@ class HXAPI:
 		
 	def restListHostsInHostset(self, host_set_id, limit=DEFAULT_LIMIT, offset=0, sort_term=None, search_term=None, filter_term={}, query_terms={}):
 		
-		endpoint_url = "host_sets/{0}/hosts".format(host_set_id)
+		endpoint_url = f"host_sets/{host_set_id}/hosts"
 		params = {
 			'limit' : limit,
 			'offset' : offset
@@ -1219,7 +1291,7 @@ class HXAPI:
 		if removelist:
 			data['changes'][0]['remove'] = removelist
 
-		request = self.build_request(self.build_api_route('host_sets/static/{0}'.format(hostset_id)), method = 'PUT', data = json.dumps(data))
+		request = self.build_request(self.build_api_route(f'host_sets/static/{hostset_id}'), method = 'PUT', data = json.dumps(data))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -1280,21 +1352,21 @@ class HXAPI:
 	
 	def restGetConfigChannel(self, channel_id):
 		
-		request = self.build_request(self.build_api_route('host_policies/channels/{0}'.format(channel_id)))
+		request = self.build_request(self.build_api_route(f'host_policies/channels/{channel_id}'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 		
 	def restGetConfigChannelConfiguration(self, channel_id):
 		
-		request = self.build_request(self.build_api_route('host_policies/channels/{0}.json'.format(channel_id)))
+		request = self.build_request(self.build_api_route(f'host_policies/channels/{channel_id}.json'))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)	
 	
 	def restDeleteConfigChannel(self, channel_id):
 
-		request = self.build_request(self.build_api_route('host_policies/channels/{0}'.format(channel_id)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f'host_policies/channels/{channel_id}'), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -1324,7 +1396,7 @@ class HXAPI:
 		
 	def restGetPolicy(self, policy_id):
 		
-		request = self.build_request(self.build_api_route("policies/{0}".format(policy_id)))
+		request = self.build_request(self.build_api_route(f"policies/{policy_id}"))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
@@ -1339,14 +1411,14 @@ class HXAPI:
 		
 	def restModifyPolicy(self, policy_id, policy_json):
 	
-		request = self.build_request(self.build_api_route("policies/{0}".format(policy_id)), method = 'PUT', data = json.dumps(policy_json))
+		request = self.build_request(self.build_api_route(f"policies/{policy_id}"), method = 'PUT', data = json.dumps(policy_json))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)
 		
 	def restDeletePolicy(self, policy_id):
 		
-		request = self.build_request(self.build_api_route("policies/{0}".format(policy_id)), method = 'DELETE')
+		request = self.build_request(self.build_api_route(f"policies/{policy_id}"), method = 'DELETE')
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		
 		return(ret, response_code, response_data)

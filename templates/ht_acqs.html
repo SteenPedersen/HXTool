@@ -3,17 +3,121 @@
 {% block navlocation %}Acquisitions{% endblock %}
 {% block content %}
 
+<style>
+	#acqDetailOverlay {
+		display: none;
+		position: fixed;
+		inset: 0;
+		background: rgba(0,0,0,0.55);
+		z-index: 1050;
+	}
+	#acqDetailPanel {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		background: #1e2a38;
+		border: 1px solid #2d3f52;
+		border-radius: 6px;
+		width: min(720px, 94vw);
+		max-height: 85vh;
+		display: flex;
+		flex-direction: column;
+	}
+	#acqDetailHeader {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 14px 18px 10px;
+		border-bottom: 1px solid #2d3f52;
+		flex-shrink: 0;
+	}
+	#acqDetailTitle {
+		color: #e0e6ed;
+		font-size: 14px;
+		font-weight: 600;
+	}
+	#acqDetailClose {
+		background: transparent;
+		border: 0;
+		color: #8ab4c4;
+		font-size: 18px;
+		cursor: pointer;
+		padding: 0 4px;
+	}
+	#acqDetailClose:hover { color: #e0e6ed; }
+	#acqDetailBody {
+		overflow-y: auto;
+		padding: 14px 18px 18px;
+		flex: 1;
+	}
+	.acqd-section {
+		margin-bottom: 14px;
+	}
+	.acqd-section-title {
+		color: #8ab4c4;
+		font-size: 11px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		margin-bottom: 6px;
+		padding-bottom: 4px;
+		border-bottom: 1px solid #2d3f52;
+	}
+	.acqd-grid {
+		display: grid;
+		grid-template-columns: 160px 1fr;
+		gap: 4px 12px;
+	}
+	.acqd-key {
+		color: #8ab4c4;
+		font-size: 12px;
+		word-break: break-word;
+	}
+	.acqd-val {
+		color: #e0e6ed;
+		font-size: 12px;
+		word-break: break-all;
+	}
+	#acqFilterBar {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+		padding: 6px 0 8px;
+		flex-wrap: wrap;
+	}
+	#acqFilterBar label {
+		color: #8ab4c4;
+		font-size: 12px;
+		margin: 0;
+		white-space: nowrap;
+	}
+	#acqFilterBar input, #acqFilterBar select {
+		font-size: 12px;
+		height: 26px;
+		padding: 0 6px;
+		min-width: 120px;
+	}
+	#acqFilterBar input { min-width: 160px; }
+</style>
+
 <script>
+
+	$.fn.dataTable.ext.errMode = 'none';
 
 	$(document).ready(function() {
 
 		var acq_datatable = $('#acqTable').DataTable( {
-			"ajax": "/api/v1/datatable_acqs",
+			"data": [],
 			"paging":   false,
-			"ordering": false,
+			"ordering": true,
 			"info":     false,
 			"searching": true,
 			"processing": false,
+			"language": {
+				"emptyTable": "<i class='fas fa-spinner fa-spin'></i>&nbsp; Loading acquisitions&hellip;",
+				"zeroRecords": "No acquisitions found."
+			},
 			"dom": '<"hxtool_datatables_buttons"B>frtip',
 			"buttons": [
 				{ extend: "copy", className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
@@ -31,9 +135,10 @@
 				{ "title": "Last poll", "data": "last_poll_timestamp" },
 				{ "title": "Type", "data": "type" },
 				{ "title": "State", "data": "state" },
+				{ "title": "Size", "data": "zip_file_size" },
 				{ "title": "Action", "data": "action" }
 			],
-			"columnDefs": [	
+			"columnDefs": [
 				{
 				 "targets": 0,
 				 "width": "20px",
@@ -72,6 +177,7 @@
 				 "targets": 8,
 				 "width": "150px",
 				 render: function ( data, type, row, meta ) {
+				 	if (type !== 'display') return data;
 				 	return(datatables_parseAcquisitionType(data));
 				 }
 				},
@@ -79,11 +185,21 @@
 				 "targets": 9,
 				 "width": "150px",
 				 render: function ( data, type, row, meta ) {
+				 	if (type !== 'display') return data;
 				 	return(datatables_parseAcquisitionState(data));
 				 }
 				},
 				{
 				 "targets": 10,
+				 "width": "80px",
+				 render: function ( data, type, row, meta ) {
+				 	if (type === 'sort' || type === 'type') return data || 0;
+				 	if (!data || data === 0) return '—';
+				 	return (data / 1024).toFixed(1) + ' KB';
+				 }
+				},
+				{
+				 "targets": 11,
 				 "width": "260px",
 				 render: function ( data, type, row, meta ) {
 				 	if(type === 'display'){
@@ -100,19 +216,65 @@
 				 			data += "<button data-type='remove' data-id='acqs/files/" + row.DT_RowId + "' class='acqAction fe-btn fe-btn--sm fe-btn--hxtool-main-remove'> remove <i class='fe-icon--right fas fa-ban'></i></button>";
 				 		}
 				 		else {
-				 			data = "N/A";	
+				 			data = "N/A";
 				 		}
 				 	}
 				 	return data;
 				 }
 				},
-				{"className": "hxtool_table_cell_center", "targets": [0, 2, 3, 4, 5, 6, 8, 9, 10]}
+				{"className": "hxtool_table_cell_center", "targets": [0, 2, 3, 4, 5, 6, 8, 9, 10, 11]}
 			]
 		});
 		$('div.dataTables_filter input').addClass("fe-input");
 
-		$("#acqTable").on("click", ".acqAction", function() {
-			myrow = $(this).closest("tr");
+		// Exclude _HX_enricher rows when the checkbox is checked.
+		$.fn.dataTable.ext.search.push(function(settings, data, dataIndex, rowData) {
+			if (settings.nTable !== document.getElementById('acqTable')) return true;
+			if ($('#acqHideEnricher').is(':checked') && rowData.request_user === '_HX_enricher') return false;
+			return true;
+		});
+
+		// ── Filter bar wiring ──────────────────────────────────────────────────
+		// Requested By column (5): exact match via select.
+		$('#acqFilterUser').on('change', function() {
+			acq_datatable.column(5).search($(this).val(), false, false).draw();
+		});
+
+		// State column (9): exact match via select.
+		$('#acqFilterState').on('change', function() {
+			acq_datatable.column(9).search($(this).val(), false, false).draw();
+		});
+
+		$('#acqHideEnricher').on('change', function() {
+			rebuildFilterSelects();
+			acq_datatable.draw();
+		});
+
+		// Rebuild Requested By and State selects from current table data.
+		function rebuildFilterSelects() {
+			var userVal  = $('#acqFilterUser').val();
+			var stateVal = $('#acqFilterState').val();
+
+			['#acqFilterUser', '#acqFilterState'].forEach(function(sel, i) {
+				var col = (i === 0) ? 5 : 9;
+				var $sel = $(sel);
+				var current = $sel.val();
+				var vals = {};
+				acq_datatable.column(col).data().each(function(d) {
+					if (d && d !== 'N/A' && !(col === 5 && d === '_HX_enricher' && $('#acqHideEnricher').is(':checked'))) vals[d] = true;
+				});
+				$sel.find('option:not(:first)').remove();
+				Object.keys(vals).sort().forEach(function(v) {
+					$sel.append('<option value="' + v + '">' + v + '</option>');
+				});
+				if (current) $sel.val(current);
+			});
+		}
+
+		// ── Action button clicks (must not bubble to row-click handler) ────────
+		$("#acqTable").on("click", ".acqAction", function(e) {
+			e.stopPropagation();
+			var myrow = $(this).closest("tr");
 			if ($(this).data("type") == "download") {
 				location.href = $(this).data("id");
 			}
@@ -125,12 +287,168 @@
 			}
 		});
 
+		// ── Row click → detail panel ───────────────────────────────────────────
+		$('#acqTable tbody').on('click', 'tr', function() {
+			var row = acq_datatable.row(this);
+			if (!row.data()) return;
+			showAcqDetail(row.data());
+		});
+
+		function formatDetailValue(val) {
+			if (val === null || val === undefined) return '<em style="color:#556">—</em>';
+			if (typeof val === 'object') return '<pre style="margin:0;color:#e0e6ed;font-size:11px;white-space:pre-wrap">' + JSON.stringify(val, null, 2) + '</pre>';
+			return $('<span>').text(String(val)).html();
+		}
+
+		function detailSection(title, pairs) {
+			if (!pairs.length) return '';
+			var html = '<div class="acqd-section"><div class="acqd-section-title">' + title + '</div><div class="acqd-grid">';
+			pairs.forEach(function(p) {
+				html += '<div class="acqd-key">' + p[0] + '</div><div class="acqd-val">' + p[1] + '</div>';
+			});
+			return html + '</div></div>';
+		}
+
+		function showAcqDetail(row) {
+			var hostname = row.hostname ? row.hostname.split('___')[0] : '—';
+			$('#acqDetailTitle').text(hostname + ' — ' + (row.type || '') + ' acquisition');
+
+			var hostPairs = [
+				['Hostname',         formatDetailValue(hostname)],
+				['Domain',           formatDetailValue(row.domain)],
+				['OS',               formatDetailValue(row.product_name)],
+				['Platform',         formatDetailValue(row.platform)],
+				['Containment',      formatDetailValue(row.containment_state)],
+				['Last poll',        formatDetailValue(row.last_poll_timestamp)]
+			];
+
+			var acqPairs = [
+				['Acquisition ID',   formatDetailValue(row.DT_RowId)],
+				['Type',             formatDetailValue(row.type)],
+				['State',            formatDetailValue(row.state)],
+				['Requested',        formatDetailValue(row.request_time)],
+				['Requested By',     formatDetailValue(row.request_user)]
+			];
+
+			// Extra fields from the full acquisition detail returned by the API.
+			var extraPairs = [];
+			var skip = new Set(['_id', 'state', 'type', 'host', 'url',
+			                    'request_actor', 'request_time']);
+			var detail = row.detail || {};
+			Object.keys(detail).sort().forEach(function(k) {
+				if (!skip.has(k)) {
+					extraPairs.push([k, formatDetailValue(detail[k])]);
+				}
+			});
+
+			$('#acqDetailBody').html(
+				detailSection('Host', hostPairs) +
+				detailSection('Acquisition', acqPairs) +
+				(extraPairs.length ? detailSection('Additional details', extraPairs) : '')
+			);
+			$('#acqDetailOverlay').show();
+		}
+
+		$('#acqDetailClose, #acqDetailOverlay').on('click', function(e) {
+			if (e.target === this) $('#acqDetailOverlay').hide();
+		});
+		$(document).on('keydown', function(e) {
+			if (e.key === 'Escape') $('#acqDetailOverlay').hide();
+		});
+
+		// ── Progressive bucket loading ─────────────────────────────────────────
+		var buckets = [
+			{ label: 'last 24 hours',      max_age: 1,    min_age: null },
+			{ label: 'last 2–7 days',      max_age: 7,    min_age: 1    },
+			{ label: 'last 8–30 days',     max_age: 30,   min_age: 7    },
+			{ label: 'older than 30 days', max_age: null, min_age: 30   }
+		];
+		var totalLoaded = 0;
+
+		function setHeaderStatus(html) {
+			$('#acqHeaderStatus').html(html);
+			$('#acqFooterStatus').html(html);
+		}
+
+		function loadBucket(idx) {
+			if (idx >= buckets.length) {
+				setHeaderStatus(
+					totalLoaded === 0
+					? '<span style="color:#8ab4c4">No acquisitions found.</span>'
+					: '<span style="color:#8ab4c4">' + totalLoaded +
+					  ' acquisition' + (totalLoaded === 1 ? '' : 's') + '</span>'
+				);
+				return;
+			}
+			var b = buckets[idx];
+			var params = [];
+			if (b.max_age !== null) params.push('max_age_days=' + b.max_age);
+			if (b.min_age !== null) params.push('min_age_days=' + b.min_age);
+			var url = '/api/v1/datatable_acqs' + (params.length ? '?' + params.join('&') : '');
+
+			setHeaderStatus('<i class="fas fa-spinner fa-spin"></i>&nbsp; Loading ' + b.label + '&hellip;');
+
+			$.getJSON(url, function(resp) {
+				if (resp.error) {
+					setHeaderStatus('<span style="color:#ea475b"><i class="fas fa-exclamation-triangle"></i>&nbsp;' + resp.error + '</span>');
+				} else {
+					var rows = resp.data || [];
+					if (rows.length > 0) {
+						acq_datatable.rows.add(rows).draw(false);
+						totalLoaded += rows.length;
+						rebuildFilterSelects();
+						setHeaderStatus('<i class="fas fa-spinner fa-spin"></i>&nbsp; ' + totalLoaded + ' loaded — fetching ' + (buckets[idx + 1] ? buckets[idx + 1].label : '') + '&hellip;');
+					}
+				}
+				loadBucket(idx + 1);
+			}).fail(function(xhr) {
+				var msg = 'Error loading ' + b.label + '.';
+				if (xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
+				setHeaderStatus('<span style="color:#ea475b"><i class="fas fa-exclamation-triangle"></i>&nbsp;' + msg + '</span>');
+				loadBucket(idx + 1);
+			});
+		}
+
+		loadBucket(0);
+
 	});
 
 </script>
 
-{{ htPanel.widgetHeader("Acquisitions", panelIcon="fa-download") }}
-	<table id='acqTable' class='hxtool_table' style='width: 100%'></table>
-{{ htPanel.widgetFooter() }}
+<!-- Detail overlay -->
+<div id="acqDetailOverlay">
+	<div id="acqDetailPanel">
+		<div id="acqDetailHeader">
+			<div id="acqDetailTitle"></div>
+			<button id="acqDetailClose" title="Close (Esc)">&times;</button>
+		</div>
+		<div id="acqDetailBody"></div>
+	</div>
+</div>
+
+<!-- Panel header with status inline (left of title) -->
+<div class='fe-panel' style='margin-top: 12px;'>
+	<div class="fe-panel-header fe-panel-header--no-background" style="display:flex; align-items:center;">
+		<div class="fe-label fe-label--background"><i class='fe-icon--left fas fa-download'></i>Acquisitions</div>
+		<div id="acqHeaderStatus" style="font-size:12px; margin-left:12px; color:#8ab4c4;"></div>
+	</div>
+	<div class='fe-panel__body'>
+
+		<!-- Filter bar -->
+		<div id="acqFilterBar">
+			<label>Requested By</label>
+			<select id="acqFilterUser"><option value="">All</option></select>
+			<label>State</label>
+			<select id="acqFilterState"><option value="">All</option></select>
+			<label style="margin-left:16px; cursor:pointer;">
+				<input type="checkbox" id="acqHideEnricher" checked> Hide _HX_enricher
+			</label>
+		</div>
+
+		<table id='acqTable' class='hxtool_table' style='width: 100%'></table>
+		<div id="acqFooterStatus" style="padding: 6px 2px; color: #8ab4c4; font-size: 12px; min-height: 22px;"></div>
+
+	</div>
+</div>
 
 {% endblock %}

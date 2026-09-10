@@ -28,7 +28,7 @@
 			r += "<div style='float: right;'>";
 			r += "<button class='hxtool_host_alert_goLink fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main' title='VirusTotal' data-link='https://www.virustotal.com/#/file/" + myValue + "/detection' aria-label='show'><span>vt<i class='fe-icon--right fas fa-external-link'></i></span></button>";
 			r += "<button class='hxtool_host_alert_goLink fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main' title='Mandiant Advantage' data-link='https://advantage.mandiant.com/search?q=" + myValue +"' aria-label='show'><span>ma<i class='fe-icon--right fas fa-external-link'></i></span></button>";
-			r += "<button class='hxtool_host_alert_goLink fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main' title='FireEye Threat Intelligence' data-link='https://intelligence.fireeye.com/search.html?search=" + myValue +"' aria-label='show'><span>fti<i class='fe-icon--right fas fa-external-link'></i></span></button>";
+			r += "<button class='hxtool_host_alert_goLink fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main' title='Trellix Threat Intelligence' data-link='https://www.trellix.com/intel-exchange/search/?q=" + myValue +"' aria-label='show'><span>fti<i class='fe-icon--right fas fa-external-link'></i></span></button>";
 			r += "<button class='hxtool_host_alert_goLink fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main' title='Google' data-link='https://www.google.com/search?q=" + myValue + "' aria-label='show'><span>google<i class='fe-icon--right fas fa-external-link'></i></span></button>";
 			r += "</div>";
 		}
@@ -604,6 +604,23 @@
 		$('#hostAlertTable').on('click','tr',function(){
 			hxtool_ajax_get_request("/api/v1/alerts/get", "id=" + $(this).attr("id"), function(myalert) {
 
+				if (!myalert['api_success']) {
+					var errMsg = "Alert details could not be retrieved.";
+					var roleHint = "";
+					try {
+						var parsed = JSON.parse(myalert['api_response']);
+						if (parsed['message']) errMsg = parsed['message'];
+						if (parsed['role_hint']) roleHint = parsed['role_hint'];
+					} catch(e) {}
+					var errHtml = "<p style='padding: 1em;'>" + $('<div>').text(errMsg).html() + "</p>";
+					if (roleHint) errHtml += "<div style='margin: 0 1em 1em; padding:10px 14px; background:rgba(255,193,7,0.12); border-left:4px solid #ffc107; border-radius:3px;'>"
+						+ "<p style='margin:0 0 4px; font-size:12px; font-weight:bold; color:#ffc107; letter-spacing:0.03em;'>&#128274;&nbsp; Required HX User Permissions</p>"
+						+ "<p style='margin:0; font-size:12px; color:rgba(255,255,255,0.85);'>" + $('<div>').text(roleHint).html() + "</p>"
+						+ "</div>";
+					$("#hostContentPanel").find(".panelContentClass").html(errHtml);
+					return;
+				}
+
 				var alert = JSON.parse(myalert['api_response']);
 
 				// First clear the content panel
@@ -613,7 +630,7 @@
 
 				// Load alert template into content panel
 				$("#hostContentPanel").find(".panelContentClass").append(parseHostAlert(alert['data']));
-				
+
 				// Show all alert data
 				$("#hostContentPanel").find(".panelContentClass").append("<button class='allAlertDetailsButton fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main' aria-label='show'><span> show all alert details </span></button>");
 				$("#hostContentPanel").find(".panelContentClass").append("<div style='display: none;' class='alertAllDetails'></div>");

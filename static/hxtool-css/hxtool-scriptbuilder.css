@@ -11,7 +11,7 @@
 
 .auditParameterTitleOptional {
 	font-family: "Open Sans";
-	font-size: 14px;
+	font-size: 16px;
 	font-weight: 700;
 	-webkit-font-smoothing: antialiased;
 	margin-bottom: 4px;
@@ -19,7 +19,7 @@
 
 .auditParameterTitle {
 	font-family: "Open Sans";
-	font-size: 14px;
+	font-size: 16px;
 	font-weight: 700;
 	-webkit-font-smoothing: antialiased;
 	margin-bottom: 4px;
@@ -27,14 +27,14 @@
 
 .auditDescription {
 	font-family: "Open Sans";
-	font-size: 12px;
+	font-size: 14px;
 	font-weight: 400;
 	-webkit-font-smoothing: antialiased;
 }
 
 .auditName {
 	font-family: "Open Sans";
-	font-size: 16px;
+	font-size: 18px;
 	text-transform: capitalize;
 	font-weight: 700;
 	-webkit-font-smoothing: antialiased;
@@ -44,7 +44,7 @@
 
 .auditNameUUID {
 	font-family: "Open Sans";
-	font-size: 12px;
+	font-size: 14px;
 	font-weight: 600;
 	-webkit-font-smoothing: antialiased;
 	margin-bottom: 12px;
@@ -62,7 +62,7 @@
 	padding: 3px;
 	margin-bottom: 4px;
 	font-family: "Open Sans";
-	font-size: 12px;
+	font-size: 14px;
 	font-weight: 700;
 	-webkit-font-smoothing: antialiased;
 	text-transform: uppercase;
@@ -90,7 +90,7 @@
 
 .auditParameterRemove {
 	margin-left: 6px;
-	font-size: 10px;
+	font-size: 12px;
 	line-height: 12px;
 	height: 16px;
 	float: right;

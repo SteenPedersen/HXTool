@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from hxtool_db import hxtool_db
 
 try:
 	from pymongo import MongoClient
 except ImportError:
-	print("HXTool is configured to use MongoDB. Please install the 'pymongo' Python module")
+	import sys; sys.stderr.write("HXTool is configured to use MongoDB. Please install the 'pymongo' Python module\n")
 	exit(1)
 
 import datetime
@@ -28,7 +27,7 @@ class tinydb_emulated_dict(dict):
 	def __setitem__(self, key, value):
 		if key == '_id':
 			value = str(value)
-		super(tinydb_emulated_dict, self).__setitem__(key, value)
+		super().__setitem__(key, value)
 	
 	@property
 	def doc_id(self):
@@ -53,10 +52,13 @@ class hxtool_mongodb(hxtool_db):
 			self._db_stacking = self._client[db_name].stacking
 			self._db_audits = self._client[db_name].audits
 			self._db_hostgroups = self._client[db_name].hostgroups
+			self._db_local_catalog = self._client[db_name].local_catalog
+			self._db_hunt_settings = self._client[db_name].hunt_settings
+			self._db_hunt_queries = self._client[db_name].hunt_queries
 			self._client.admin.command('ismaster')
 			logger.info("MongoDB connection successful")
 		except Exception as e:
-			logger.error("Unable to connect to MongoDB, error: {}".format(e))
+			logger.error(f"Unable to connect to MongoDB, error: {e}")
 			exit(1)
 		
 		# Ensure that the text wildcard index is in place
@@ -348,6 +350,50 @@ class hxtool_mongodb(hxtool_db):
 	def oiocGet(self, ioc_id):
 		return self._db_openioc.find_one( { "ioc_id": ioc_id } )
 
+	def localCatalogCreate(self, name, uri_name, category, platforms, description, create_text, presence, execution):
+		return self._db_local_catalog.insert_one({
+			'local_catalog_id': str(secure_uuid4()),
+			'name': name,
+			'uri_name': uri_name,
+			'category': category,
+			'platforms': platforms or [],
+			'description': description or '',
+			'create_text': create_text or '',
+			'presence': presence or [],
+			'execution': execution or [],
+			'create_timestamp': HXAPI.dt_to_str(datetime.datetime.utcnow()),
+			'update_timestamp': HXAPI.dt_to_str(datetime.datetime.utcnow())
+		})
+
+	def localCatalogList(self):
+		return list(self._db_local_catalog.find())
+
+	def localCatalogGet(self, local_catalog_id):
+		return self._db_local_catalog.find_one({'local_catalog_id': local_catalog_id})
+
+	def localCatalogGetByUriName(self, uri_name):
+		return self._db_local_catalog.find_one({'uri_name': uri_name})
+
+	def localCatalogUpdate(self, local_catalog_id, name, uri_name, category, platforms, description, create_text, presence, execution):
+		return self._db_local_catalog.update_one(
+			{'local_catalog_id': local_catalog_id},
+			{'$set': {'name': name, 'uri_name': uri_name, 'category': category,
+					  'platforms': platforms or [], 'description': description or '',
+					  'create_text': create_text or '', 'presence': presence or [],
+					  'execution': execution or [],
+					  'update_timestamp': HXAPI.dt_to_str(datetime.datetime.utcnow())}}
+		)
+
+	def localCatalogDelete(self, local_catalog_id):
+		return self._db_local_catalog.delete_one({'local_catalog_id': local_catalog_id})
+
+	def huntSettingsGet(self):
+		result = self._db_hunt_settings.find_one({'key': 'config'})
+		return result or {}
+
+	def huntSettingsSet(self, settings):
+		self._db_hunt_settings.update_one({'key': 'config'}, {'$set': settings}, upsert=True)
+
 	def taskCreate(self, serialized_task):
 		return self._db_tasks.insert_one(serialized_task)
 	
@@ -380,6 +426,15 @@ class hxtool_mongodb(hxtool_db):
 	def taskProfileDelete(self, taskprofile_id):
 		return self._db_taskprofiles.delete_one({ "taskprofile_id": taskprofile_id })
 
+	def huntQueryCreate(self, displayname, query):
+		return self._db_hunt_queries.replace_one(
+			{'displayname': displayname},
+			{'displayname': displayname, 'query': query},
+			upsert=True
+		)
+
+	def huntQueryGet(self, displayname):
+		return self._db_hunt_queries.find_one({'displayname': displayname})
 
 	def auditCreate(self, profile_id, host_id, hostname, generator, start_time, end_time, results):
 		return self._db_audits.insert_one({'profile_id' : profile_id,

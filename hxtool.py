@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 ##################################################
-# hxTool - 3rd party user-interface for FireEye HX 
+# hxTool - 3rd party user-interface for Trellix HX
 #
 # Henrik Olsson
 # henrik.olsson@fireeye.com
@@ -29,7 +28,7 @@ import argparse
 try:
 	from flask import Flask, request, Response, session, redirect, render_template, send_file, g, url_for, abort, Blueprint
 except ImportError as e:
-	print("hxtool requires the 'Flask' module, please install it.\r\nError: {}".format(e))
+	sys.stderr.write(f"hxtool requires the 'Flask' module, please install it.\nError: {e}\n")
 	exit(1)
 
 # Deal with jinja2 namespace changes in newer versions
@@ -89,26 +88,26 @@ def nl2br(eval_ctx, value):
 @app.route('/analysis_data', methods=['GET'])
 @valid_session_required
 def analysis_data(hx_api_object):
-	return render_template('voltron_data.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('voltron_data.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 #############
 
 ### Dashboard page
 @app.route('/', methods=['GET'])
 @valid_session_required
 def dashboard(hx_api_object):
-	return render_template('ht_main-dashboard.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_main-dashboard.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### AV Dashboard
 @app.route('/dashboard-av', methods=['GET'])
 @valid_session_required
 def dashboardav(hx_api_object):
-	return render_template('ht_dashboard-av.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_dashboard-av.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Agent Dashboard
 @app.route('/dashboard-agent', methods=['GET'])
 @valid_session_required
 def dashboardagent(hx_api_object):
-	return render_template('ht_dashboard-agent.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_dashboard-agent.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 
 ### New host drilldown page
@@ -121,46 +120,46 @@ def host_view(hx_api_object):
 	mytaskprofiles = hxtool_global.hxtool_db.taskProfileList()
 	taskprofiles = formatTaskprofilesFabric(mytaskprofiles)
 
-	return render_template('ht_host_view.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), scripts=scripts, taskprofiles=taskprofiles, alerttypes=json.dumps(hxtool_global.hx_alert_types))
+	return render_template('ht_host_view.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', scripts=scripts, taskprofiles=taskprofiles, alerttypes=json.dumps(hxtool_global.hx_alert_types))
 
 ### Alerts page
 @app.route('/alert', methods=['GET'])
 @valid_session_required
 def alert(hx_api_object):
-	return render_template('ht_alert.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_alert.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Scheduler page
 @app.route('/scheduler', methods=['GET'])
 @valid_session_required
 def scheduler_view(hx_api_object):
-	return render_template('ht_scheduler.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_scheduler.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Script builder page
 @app.route('/scriptbuilder', methods=['GET', 'POST'])
 @valid_session_required
 def scriptbuilder_view(hx_api_object):
-	with open(combine_app_path("static", "acquisitions.json"), 'r') as f:
+	with open(combine_app_path("static", "acquisitions.json")) as f:
 		auditspace = f.read()
 		f.close()
-	return render_template('ht_scriptbuilder.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), auditspace=auditspace)
+	return render_template('ht_scriptbuilder.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', auditspace=auditspace)
 
 ### Task profile page
 @app.route('/taskprofile', methods=['GET', 'POST'])
 @valid_session_required
 def taskprofile(hx_api_object):
-	return render_template('ht_taskprofile.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_taskprofile.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Audit Viewer page
 @app.route('/auditexplorer', methods=['GET'])
 @valid_session_required
 def auditexplorer(hx_api_object):
-	return render_template('ht_auditviewer.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_auditviewer.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Manage Audits page
 @app.route('/auditmanager', methods=['GET'])
 @valid_session_required
 def auditmanager(hx_api_object):
-	return render_template('ht_auditmanager.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_auditmanager.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Bulk acq page
 @app.route('/bulkacq', methods=['GET'])
@@ -175,19 +174,19 @@ def bulkacq_view(hx_api_object):
 	mytaskprofiles = hxtool_global.hxtool_db.taskProfileList()
 	taskprofiles = formatTaskprofilesFabric(mytaskprofiles)
 
-	return render_template('ht_bulkacq.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), hostsets=hostsets, scripts=scripts, taskprofiles=taskprofiles)
+	return render_template('ht_bulkacq.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', hostsets=hostsets, scripts=scripts, taskprofiles=taskprofiles)
 
 ### Hosts
 @app.route('/hostsearch', methods=['GET', 'POST'])
 @valid_session_required
 def hosts(hx_api_object):
-	return render_template('ht_hostsearch.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_hostsearch.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Acquisitions listing
 @app.route('/acqs', methods=['GET'])
 @valid_session_required
 def acqs(hx_api_object):
-	return render_template('ht_acqs.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_acqs.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 #### Enterprise Search
 @app.route('/search', methods=['GET'])
@@ -199,36 +198,88 @@ def search(hx_api_object):
 	myiocs = hxtool_global.hxtool_db.oiocList()
 	openiocs = formatOpenIocsFabric(myiocs)
 	
-	return render_template('ht_searchsweep.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), hostsets=hostsets, openiocs=openiocs)
+	return render_template('ht_searchsweep.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', hostsets=hostsets, openiocs=openiocs)
+
+@app.route('/hunt', methods=['GET'])
+@valid_session_required
+def hunt(hx_api_object):
+	(ret, response_code, response_data) = hx_api_object.restListHostsets()
+	hostsets = formatHostsetsFabric(response_data) if ret else ''
+	return render_template('ht_hunt.html', user=session['ht_user'],
+		controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}',
+		hostsets=hostsets)
 
 @app.route('/searchresult', methods=['GET'])
 @valid_session_required
 def searchresult(hx_api_object):
 	if request.args.get('id'):
 		(ret, response_code, response_data) = hx_api_object.restGetSearchResults(request.args.get('id'))
-		return render_template('ht_search_dd.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+		return render_template('ht_search_dd.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 			
 ### Manage Indicators
 @app.route('/indicators', methods=['GET', 'POST'])
 @valid_session_required
 def indicators(hx_api_object):
-	return render_template('ht_indicators.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_indicators.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
+
+@app.route('/local_catalog', methods=['GET'])
+@valid_session_required
+def local_catalog(hx_api_object):
+	return render_template('ht_local_catalog.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
+
+@app.route('/local_catalog_edit/<string:local_catalog_id>', methods=['GET'])
+@valid_session_required
+def local_catalog_edit(hx_api_object, local_catalog_id):
+	entry = hxtool_global.hxtool_db.localCatalogGet(local_catalog_id)
+	if not entry:
+		abort(404)
+
+	eventspace = eventspace_from_file()
+
+	def convert_conditions(cond_list):
+		result = []
+		for tests in (cond_list or []):
+			result.append({'uuid': str(secure_uuid4()), 'tests': tests})
+		return json.dumps(result)
+
+	mypre  = convert_conditions(entry.get('presence', []))
+	myexec = convert_conditions(entry.get('execution', []))
+
+	platforms = entry.get('platforms', [])
+	platform = platforms[0] if len(platforms) == 1 else 'all'
+
+	return render_template(
+		'ht_indicator_create_edit.html',
+		user=session['ht_user'],
+		controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}',
+		iocname=entry.get('name', ''),
+		myiocuri=entry.get('uri_name', ''),
+		myioccategory=entry.get('category', ''),
+		mydescription=entry.get('description', ''),
+		ioccategory=json.dumps(entry.get('category', '')),
+		platform=json.dumps(platform),
+		mypre=mypre,
+		myexec=myexec,
+		conditions_restricted=False,
+		eventspace=eventspace,
+		local_catalog_id=local_catalog_id,
+	)
 
 @app.route('/indicatorqueue', methods=['GET'])
 @valid_session_required
 def indicatorsqueue(hx_api_object):
-	return render_template('ht_indicatorqueue.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_indicatorqueue.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 @app.route('/categories', methods=['GET'])
 @valid_session_required
 def categories(hx_api_object):
-	return render_template('ht_categories.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_categories.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Streaming indicators
 @app.route('/streaming_indicators', methods=['GET', 'POST'])
 @valid_session_required
 def streaming_indicators(hx_api_object):
-	return render_template('ht_streaming_indicators.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_streaming_indicators.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 @app.route('/streamingioc', methods=['GET'])
 @valid_session_required
@@ -265,7 +316,7 @@ def streamingioc(hx_api_object):
 		return render_template(
 							'ht_streaming_indicator_create_edit.html',
 							user=session['ht_user'], 
-							controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), 
+							controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', 
 							categories=categories, 
 							iocname=iocname, 
 							myiocuri=myiocuri, 
@@ -281,7 +332,7 @@ def streamingioc(hx_api_object):
 		return render_template(
 							'ht_streaming_indicator_create_edit.html', 
 							user=session['ht_user'], 
-							controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), 
+							controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', 
 							categories=categories, 
 							eventspace=eventspace)
 
@@ -299,9 +350,50 @@ def rtioc(hx_api_object):
 		(ret, response_code, response_data) = hx_api_object.restListCategories()
 		categories = formatCategoriesSelect(response_data)
 
-		#(ret, response_code, response_data) = hx_api_object.restListIndicators(limit=1, filter_term={ 'uri_name': uuid })
-		(ret, response_code, response_data) = hx_api_object.restGetUrl(url, include_params=True)
-		if ret:
+		# Parse category and uri_name from the indicator URL path
+		# URL format: /hx/api/v3/indicators/{category}/{uri_name}
+		url_parts = url.rstrip('/').split('/')
+		ioc_category_arg = url_parts[-2]
+		ioc_uri_arg = url_parts[-1]
+
+		# If the caller already passed indicator metadata (from DataTable row data),
+		# use it directly to avoid a separate GET that may 403 for restricted roles.
+		# Always use ioc_uri_arg/ioc_category_arg (parsed from the indicator URL path)
+		# for conditions calls — the URL is authoritative, not the display-name params.
+		if request.args.get('iocname'):
+			iocname = request.args.get('iocname')
+			myiocuri = ioc_uri_arg
+			ioccategory = ioc_category_arg
+			mydescription = request.args.get('description', '')
+			try:
+				platforms_raw = request.args.get('platforms', '[]')
+				platforms_list = json.loads(platforms_raw)
+			except Exception:
+				platforms_list = []
+			platform = platforms_list[0] if len(platforms_list) == 1 else "all"
+		else:
+			(ret, response_code, response_data) = hx_api_object.restGetIndicator(ioc_category_arg, ioc_uri_arg)
+			if not ret:
+				hx_msg = "Access denied"
+				try:
+					details = (response_data or {}).get('details', [])
+					if details:
+						hx_msg = '; '.join(f"Code {d.get('code', '')}: {d.get('message', '')}" for d in details)
+				except Exception:
+					pass
+				api_path = hx_api_object.build_api_route(f'indicators/{ioc_category_arg}/{ioc_uri_arg}')
+				full_url = f'https://{hx_api_object.hx_host}:{hx_api_object.hx_port}{api_path}'
+				err_html = (
+					"<div style='padding:2em; font-family:sans-serif;'>"
+					"<p style='color:#ea475b; font-weight:bold; font-size:16px;'>&#9888; Cannot open rule for editing</p>"
+					f"<p>The HX API returned HTTP {response_code}.</p>"
+					f"<p style='color:rgba(255,255,255,0.6); font-size:13px;'>HX API: <code>{full_url}</code></p>"
+					f"<p style='color:rgba(255,255,255,0.6); font-size:13px;'>Error: {hx_msg}</p>"
+					"<p style='margin-top:1.5em;'><a href='/indicators' style='color:#0fb8dc;'>&#8592; Back to Manage Rules</a></p>"
+					"</div>"
+				)
+				return app.response_class(response=err_html, status=200, mimetype='text/html')
+
 			iocname = response_data['data']['name']
 			myiocuri = response_data['data']['uri_name']
 			ioccategory = response_data['data']['category']['uri_name']
@@ -311,42 +403,45 @@ def rtioc(hx_api_object):
 			else:
 				platform = "all"
 
-		
-			(ret, response_code, condition_class_presence) = hx_api_object.restGetCondition(ioccategory, myiocuri, 'presence')
-			(ret, response_code, condition_class_execution) = hx_api_object.restGetCondition(ioccategory, myiocuri, 'execution')
-			
-			mypre = json.dumps(condition_class_presence['data']['entries'])
-			myexec = json.dumps(condition_class_execution['data']['entries'])
+		(ret_p, _, condition_class_presence) = hx_api_object.restGetCondition(ioccategory, myiocuri, 'presence')
+		(ret_e, _, condition_class_execution) = hx_api_object.restGetCondition(ioccategory, myiocuri, 'execution')
 
-			if request.args.get('clone'):
-				ioccategory = "Custom"
+		mypre  = json.dumps(condition_class_presence['data']['entries']  if ret_p else [])
+		myexec = json.dumps(condition_class_execution['data']['entries'] if ret_e else [])
+		conditions_restricted = not ret_p or not ret_e
+
+		if request.args.get('clone'):
+			ioccategory = "Custom"
 
 		return render_template(
-							'ht_indicator_create_edit.html', 
-							user=session['ht_user'], 
-							controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), 
-							categories=categories, 
-							iocname=iocname, 
-							myiocuri=myiocuri, 
-							myioccategory=ioccategory, 
-							mydescription=mydescription, 
-							ioccategory=json.dumps(ioccategory), 
-							platform=json.dumps(platform), 
-							mypre=mypre, 
-							myexec=myexec, 
+							'ht_indicator_create_edit.html',
+							user=session['ht_user'],
+							controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}',
+							categories=categories,
+							iocname=iocname,
+							myiocuri=myiocuri,
+							myioccategory=ioccategory,
+							mydescription=mydescription,
+							ioccategory=json.dumps(ioccategory),
+							platform=json.dumps(platform),
+							mypre=mypre,
+							myexec=myexec,
+							conditions_restricted=conditions_restricted,
 							eventspace=eventspace)
 	else:
 		(ret, response_code, response_data) = hx_api_object.restListCategories()
 		categories = formatCategoriesSelect(response_data)
+		catalog_mode = request.args.get('mode') == 'catalog'
 		return render_template(
-							'ht_indicator_create_edit.html', 
-							user=session['ht_user'], 
-							controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), 
-							categories=categories, 
+							'ht_indicator_create_edit.html',
+							user=session['ht_user'],
+							controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}',
+							categories=categories,
+							catalog_mode=catalog_mode,
 							eventspace=eventspace)
 
 def eventspace_from_file():
-	with open(combine_app_path('static/eventbuffer.json'), 'r') as myEventFile:
+	with open(combine_app_path('static/eventbuffer.json')) as myEventFile:
 		return myEventFile.read()
 
 # TODO: These two functions should be merged at some point
@@ -364,7 +459,7 @@ def bulkdownload(hx_api_object):
 			flask_response.headers['Content-Disposition'] = response_data.headers['Content-Disposition']
 			return flask_response
 		else:
-			return "HX controller responded with code {0}: {1}".format(response_code, response_data)
+			return f"HX controller responded with code {response_code}: {response_data}"
 	else:
 		abort(404)
 
@@ -385,7 +480,7 @@ def download(hx_api_object):
 			flask_response.headers['Content-Disposition'] = response_data.headers['Content-Disposition']
 			return flask_response
 		else:
-			return "HX controller responded with code {0}: {1}".format(response_code, response_data)
+			return f"HX controller responded with code {response_code}: {response_data}"
 	else:
 		abort(404)		
 
@@ -398,25 +493,25 @@ def download_multi_file_single(hx_api_object):
 			file_records = list(filter(lambda f: int(f['acquisition_id']) == int(request.args.get('acq_id')), multi_file['files']))
 			if file_records and file_records[0]:
 				# TODO: should multi_file be hardcoded?
-				path = combine_app_path(download_directory_base(), hx_api_object.hx_host, 'multi_file', request.args.get('mf_id'), '{}_{}.zip'.format(file_records[0]['hostname'], request.args.get('acq_id')))
+				path = combine_app_path(download_directory_base(), hx_api_object.hx_host, 'multi_file', request.args.get('mf_id'), f"{file_records[0]['hostname']}_{request.args.get('acq_id')}.zip")
 				#logger.info('Acquisition download - User: %s@%s:%s - URL: %s', session['ht_user'], hx_api_object.hx_host, hx_api_object.hx_port, request.args.get('acq_id'))
 				logger.info(format_activity_log(msg="multi-file acquisition download", id=request.args.get('acq_id'), user=session['ht_user'], controller=session['hx_ip']))
 				return send_file(path, download_name=os.path.basename(path), as_attachment=True)
 		else:
-			return "HX controller responded with code {0}: {1}".format(response_code, response_data)
+			return f"HX controller responded with code {response_code}: {response_data}"
 	abort(404)		
 
 ### Scripts
 @app.route('/scripts', methods=['GET'])
 @valid_session_required
 def scripts(hx_api_object):
-	return render_template('ht_scripts.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_scripts.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### OpenIOCs
 @app.route('/openioc', methods=['GET'])
 @valid_session_required
 def openioc(hx_api_object):
-	return render_template('ht_openioc.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_openioc.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 ### Multifile acquisitions
 @app.route('/multifile', methods=['GET'])
@@ -424,7 +519,7 @@ def openioc(hx_api_object):
 def multifile(hx_api_object):
 	(ret, response_code, response_data) = hx_api_object.restListHostsets()
 	hostsets = formatHostsets(response_data)
-	return render_template('ht_multifile.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), hostsets=hostsets)
+	return render_template('ht_multifile.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', hostsets=hostsets)
 
 @app.route('/file_listing', methods=['GET'])
 @valid_session_required
@@ -434,39 +529,55 @@ def file_listing(hx_api_object):
 	file_listing = hxtool_global.hxtool_db.fileListingGetById(fl_id)
 	fl_results = file_listing['files']
 	display_fields = ['FullPath', 'Username', 'SizeInBytes', 'Modified', 'Sha256sum'] 
-	return render_template('ht_file_listing.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), file_listing=file_listing, fl_results=fl_results, display_fields=display_fields)
+	return render_template('ht_file_listing.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', file_listing=file_listing, fl_results=fl_results, display_fields=display_fields)
 
 ### Stacking
 @app.route('/stacking', methods=['GET'])
 @valid_session_required
 def stacking(hx_api_object):
-	return render_template('ht_stacking.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_stacking.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 @app.route('/stackinganalyze', methods=['GET'])
 @valid_session_required
 def stackinganalyze(hx_api_object):
-	return render_template('ht_stacking_analyze.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	return render_template('ht_stacking_analyze.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 @app.route('/sysinfo', methods=['GET'])
 @valid_session_required
 def sysinfo(hx_api_object):
-	return render_template('ht_sysinfo.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+	license_path = os.path.join(app.root_path, 'LICENSE')
+	try:
+		with open(license_path, 'r', encoding='utf-8') as f:
+			license_text = f.read()
+	except OSError:
+		license_text = None
+	return render_template('ht_sysinfo.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', license_text=license_text)
 
 ### Settings
 @app.route('/settings', methods=['GET', 'POST'])
 @valid_session_required
 def settings(hx_api_object):
+	from hxtool_hunt import HUNT_TYPES as _ALL_HUNT_TYPES
 	if request.method == 'POST':
-		hxtool_global.hxtool_scheduler.add_task_api_session(session['ht_profileid'], hx_api_object.hx_host, hx_api_object.hx_port, request.form.get('bguser'), request.form.get('bgpass'))
-		logger.info(format_activity_log(msg="background processing credentials action", action="set", profile=session['ht_profileid'], user=session['ht_user'], controller=session['hx_ip']))
+		action = request.form.get('settings_action')
+		if action == 'hunt':
+			enabled = request.form.getlist('hunt_enabled_types')
+			hxtool_global.hxtool_db.huntSettingsSet({'enabled_types': enabled})
+			logger.info(format_activity_log(msg="hunt settings action", action="set", user=session['ht_user'], controller=session['hx_ip']))
+		else:
+			hxtool_global.hxtool_scheduler.add_task_api_session(session['ht_profileid'], hx_api_object.hx_host, hx_api_object.hx_port, request.form.get('bguser'), request.form.get('bgpass'))
+			logger.info(format_activity_log(msg="background processing credentials action", action="set", profile=session['ht_profileid'], user=session['ht_user'], controller=session['hx_ip']))
 	elif request.method == 'GET' and request.args.get('unset') == '1':
 		hxtool_global.hxtool_scheduler.remove_task_api_session(session['ht_profileid'])
 		logger.info(format_activity_log(msg="background processing credentials action", action="delete", user=session['ht_user'], controller=session['hx_ip']))
 		return redirect("/settings", code=302)
-	
-	bgcreds = formatProfCredsInfo((hxtool_global.hxtool_db.backgroundProcessorCredentialGet(session['ht_profileid']) is not None))
-	
-	return render_template('ht_settings.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), bgcreds=bgcreds)
+
+	bgcreds = formatProfCredsInfo(hxtool_global.hxtool_db.backgroundProcessorCredentialGet(session['ht_profileid']) is not None)
+	hunt_db = hxtool_global.hxtool_db.huntSettingsGet()
+	default_enabled = [ht['id'] for ht in _ALL_HUNT_TYPES]
+	hunt_settings = {'enabled_types': hunt_db.get('enabled_types', default_enabled), 'all_types': _ALL_HUNT_TYPES}
+
+	return render_template('ht_settings.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', bgcreds=bgcreds, hunt_settings=hunt_settings)
 
 
 ### Custom Configuration Channels
@@ -478,9 +589,9 @@ def channels(hx_api_object):
 		(ret, response_code, response_data) = hx_api_object.restListHostsets()
 		hostsets = formatHostsets(response_data)
 		
-		return render_template('ht_configchannel.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port), hostsets=hostsets)
+		return render_template('ht_configchannel.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', hostsets=hostsets)
 	else:
-		return render_template('ht_noaccess.html', user=session['ht_user'], controller='{0}:{1}'.format(hx_api_object.hx_host, hx_api_object.hx_port))
+		return render_template('ht_noaccess.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 		
 
 #### Authentication
@@ -500,6 +611,7 @@ def login():
 									default_encoding = default_encoding)
 
 				(ret, response_code, response_data) = hx_api_object.restLogin(request.form['ht_user'], request.form['ht_pass'], auto_renew_token = True)
+				is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 				if ret:
 					# Set session variables
 					session['ht_user'] = request.form['ht_user']
@@ -515,16 +627,29 @@ def login():
 						enabled_module_names = [ _['name'] for _ in m_response_data['data'] ]
 						session['hx_enabled_modules'] = enabled_module_names
 					else:
-						logger.info("Failed to retreive enabled modules. Error: {}".format(m_response_data))
+						logger.info(f"Failed to retreive enabled modules. Error: {m_response_data}")
 					logger.info(format_activity_log(msg="user logged in", user=session['ht_user'], controller=session['hx_ip']))
-					redirect_uri = request.args.get('redirect_uri')
-					if not redirect_uri:
-						redirect_uri = "/"
+					redirect_uri = request.args.get('redirect_uri') or "/"
+					if is_ajax:
+						return json.dumps({'success': True, 'redirect': redirect_uri}), 200, {'Content-Type': 'application/json'}
 					return redirect(redirect_uri, code=302)
 				else:
-					fail = response_data
-			else:
-				fail = "Invalid profile ID."
+					# Extract the most specific human-readable message from the HX API response
+					if response_code is None:
+						fail = f"Could not connect to {ht_profile['hx_host']}:{ht_profile['hx_port']}. Connection timed out or was refused."
+					elif isinstance(response_data, dict):
+						details = response_data.get('details') or []
+						detail_msg = details[0].get('message', '') if details else ''
+						fail = detail_msg or response_data.get('message') or 'Login failed.'
+					else:
+						fail = str(response_data) if response_data else 'Login failed.'
+					if is_ajax:
+						return json.dumps({'success': False, 'message': fail}), 401, {'Content-Type': 'application/json'}
+		else:
+			fail = "Invalid profile ID."
+			is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+			if is_ajax:
+				return json.dumps({'success': False, 'message': fail}), 400, {'Content-Type': 'application/json'}
 	return render_template('ht_login.html', hx_default_port = HXAPI.HX_DEFAULT_PORT, fail = fail, version = hxtool_vars.__version__)
 		
 @app.route('/logout', methods=['GET'])
@@ -636,10 +761,10 @@ def hxtool_upgrade():
 					f = raw_input
 				except NameError:
 					f = input
-				r = f("{} already exists in {}, do you want to overwrite it? (Note that this might be a default file that you can safely overwrite) (Y/N)?".format(file, hxtool_vars.data_path))
+				r = f(f"{file} already exists in {hxtool_vars.data_path}, do you want to overwrite it? (Note that this might be a default file that you can safely overwrite) (Y/N)?")
 				if r.strip().lower() != 'y':
 					continue
-			print("UPGRADE: Moving {} to the data folder".format(file))
+			logger.info("UPGRADE: Moving %s to the data folder", file)
 			os.rename(combine_app_path(file), combine_app_path(hxtool_vars.data_path, file))
 
 #Run upgrade code before everything else
@@ -648,15 +773,15 @@ hxtool_upgrade()
 if __name__ == "__main__":
 	signal.signal(signal.SIGINT, sigint_handler)
 	
-	parser = argparse.ArgumentParser(description = "HXTool version {}".format(hxtool_vars.__version__), usage = "%(prog)s -h for more information.")
+	parser = argparse.ArgumentParser(description = f"HXTool version {hxtool_vars.__version__}", usage = "%(prog)s -h for more information.")
 	parser.add_argument('-debug', dest = 'debug', action='store_true', required = False, default = False, help = "Enable debug mode logging. Note: Very verbose.")
 	parser.add_argument('--clear-sessions', dest = 'clear_sessions', action='store_true', required = False, default = False, help = "Clear stale sessions from the database. Note that this should be done by a scheduler task.")
 	parser.add_argument('--clear-saved-tasks', dest = 'clear_saved_tasks', action='store_true', required = False, default = False, help = "Clear saved tasks from the database.")
-	parser.add_argument('-v', '--version', action='version', version='HXTool version {}'.format(hxtool_vars.__version__))
+	parser.add_argument('-v', '--version', action='version', version=f'HXTool version {hxtool_vars.__version__}')
 	
 	try:
 		args = parser.parse_args()
-	except:
+	except SystemExit:
 		parser.exit(1)
 	
 	
@@ -711,7 +836,7 @@ if __name__ == "__main__":
 
 	
 	# TODO: This should really be after app.run, but you cannot run code after app.run, so we'll leave this here for now.
-	logger.info("Application is running. Please point your browser to http{0}://{1}:{2}. Press Ctrl+C/Ctrl+Break to exit.".format(
+	logger.info("Application is running. Please point your browser to http{}://{}:{}. Press Ctrl+C/Ctrl+Break to exit.".format(
 																							's' if hxtool_global.hxtool_config['network']['ssl'] == 'enabled' else '',
 																							hxtool_global.hxtool_config['network']['listen_address'], 
 																							hxtool_global.hxtool_config['network']['port']))

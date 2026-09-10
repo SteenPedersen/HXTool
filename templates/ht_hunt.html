@@ -1,0 +1,608 @@
+{% extends "layout.html" %}
+{% block title %}HXTool - IOC Hunt{% endblock %}
+{% block navlocation %}IOC Hunt{% endblock %}
+{% block content %}
+
+<style>
+/* ── Container ── */
+#hunt-container { margin-top: 8px; }
+#hunt-body { display: flex; gap: 16px; align-items: flex-start; }
+#hunt-left { flex: 2; min-width: 0; }
+#hunt-right { width: 260px; flex-shrink: 0; position: sticky; top: 8px; align-self: flex-start; }
+
+/* ── Textarea + overlay ── */
+#hunt-wrap {
+	position: relative;
+	height: calc(100vh - 220px);
+	min-height: 300px;
+	background: #000;
+	border: 1px solid #2e4053;
+	border-radius: 3px;
+}
+#hunt-highlight, #hunt-input {
+	position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+	font-family: 'Courier New', Courier, monospace;
+	font-size: 13px; line-height: 1.55;
+	padding: 8px 10px;
+	white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+	border: none; outline: none; margin: 0; box-sizing: border-box; width: 100%;
+}
+#hunt-highlight { pointer-events: none; color: transparent; background: transparent; overflow: hidden; z-index: 0; }
+#hunt-highlight mark { border-radius: 2px; padding: 0 1px; color: transparent; }
+#hunt-input {
+	color: #c9d8e4; background: transparent !important;
+	-webkit-appearance: none; appearance: none;
+	z-index: 1; overflow-y: auto; caret-color: #c9d8e4; resize: none;
+}
+#hunt-input::placeholder { color: #6b8fa8; }
+
+/* ── Toolbar ── */
+#hunt-toolbar { display: flex; align-items: center; gap: 8px; padding-top: 6px; }
+
+/* ── Chips ── */
+#hunt-summary { min-height: 28px; margin: 6px 0 2px; }
+.hunt-chip {
+	display: inline-block; padding: 2px 10px; border-radius: 10px;
+	font-size: 11px; font-weight: 600; margin: 2px 3px 2px 0;
+	cursor: pointer; user-select: none; transition: opacity 0.15s;
+}
+.hunt-chip:hover { filter: brightness(1.15); }
+
+/* ── IOC groups ── */
+#hunt-groups-section { display: none; margin-top: 4px; }
+.hunt-ioc-group { margin-bottom: 8px; padding-left: 8px; border-left: 3px solid; transition: opacity 0.15s; }
+.hunt-ioc-group-label { font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+.hunt-ioc-item { font-family: 'Courier New', Courier, monospace; font-size: 12px; display: flex; align-items: center; gap: 6px; padding: 1px 0; color: #c9d8e4; }
+
+/* ── Right panel ── */
+.hunt-right-label { font-size: 10px; font-weight: 700; color: #6b8fa8; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.hunt-right-section { margin-bottom: 14px; }
+#hunt-sched-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #8ab4c4; padding: 3px 0; user-select: none; }
+#hunt-sched-toggle:hover { color: #c9d8e4; }
+#hunt-sched-at { display: none; padding: 6px 0 0 18px; }
+#hunt-run-at-value { font-size: 12px; background: #0d1f2b; border: 1px solid #2e4053; color: #c9d8e4; padding: 3px 6px; border-radius: 3px; margin-top: 4px; width: 100%; box-sizing: border-box; }
+
+/* ── Modal backdrop ── */
+#hunt-modal {
+	display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+	z-index: 9100; background: rgba(0,0,0,0.65);
+}
+#hunt-modal-box {
+	position: absolute; top: 6vh; left: 50%; transform: translateX(-50%);
+	width: 780px; max-width: 94vw; max-height: 86vh;
+	background: #0d1f2b; border: 1px solid #2e4053; border-radius: 6px;
+	display: flex; flex-direction: column; overflow: hidden;
+	box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+}
+#hunt-modal-hdr {
+	display: flex; align-items: center; gap: 10px;
+	padding: 11px 16px; border-bottom: 1px solid #1e2d38; flex-shrink: 0;
+}
+#hunt-modal-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+/* ── API preview cards ── */
+.api-card {
+	background: #091824; border: 1px solid #1e2d38; border-radius: 4px;
+	margin-bottom: 12px; overflow: hidden;
+}
+.api-card-hdr {
+	display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+	border-bottom: 1px solid #1e2d38;
+}
+.api-card-method {
+	font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 3px;
+	background: #1a6b3a; color: #81c784; border: 1px solid #2e7d52; flex-shrink: 0;
+}
+.api-card-url {
+	font-family: 'Courier New', monospace; font-size: 11px; color: #8ab4c4; flex: 1; min-width: 0;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.api-card-type-badge {
+	font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 8px; flex-shrink: 0;
+}
+.api-card-body { padding: 10px 12px; }
+.api-json-block {
+	font-family: 'Courier New', monospace; font-size: 11.5px; line-height: 1.6;
+	color: #c9d8e4; white-space: pre; overflow-x: auto;
+	background: #040e16; border: 1px solid #1e2d38; border-radius: 3px;
+	padding: 8px 10px; margin: 0;
+}
+/* JSON syntax colors */
+.jk { color: #6cb8f0; }   /* key */
+.js { color: #81c784; }   /* string value */
+.jn { color: #ffb74d; }   /* number */
+.jp { color: #8ab4c4; }   /* punctuation */
+.jl { color: #4a6070; }   /* label/comment */
+
+.api-copy-btn {
+	margin-top: 6px; font-size: 11px;
+}
+.api-empty {
+	padding: 28px; text-align: center; color: #4a6070; font-size: 13px;
+}
+</style>
+
+<script>
+var HUNT_TYPES = [];
+var HUNT_NORMALIZERS = {
+	'none':    function(v) { return v; },
+	'process': function(v) { return v.replace(/<[^>]+>/g, '*'); },
+	'ip':      function(v) { return v.replace(/\s/g,'').replace(/\[\.\]|\(\.\)|\\\./g,'.'); },
+	'domain':  function(v) { return v.replace(/\[\.\]|\(\.\)/g,'.').toLowerCase(); },
+	'url': function(v) {
+		v = v.replace(/^hxxps?/i, function(m){ return m.replace(/xx/gi,'tt'); });
+		v = v.replace(/\[:\/\/\]/g,'://').replace(/\[:\]/g,':');
+		return v.replace(/\[\.?\]|\(\.\)/g,'.');
+	},
+	'dirpath': function(v) { return v.replace(/[/\\](\*{1,2})?$/, ''); },
+};
+
+var TYPE_COLORS = ['#4fc3f7','#81c784','#ff8a65','#ba68c8','#4db6ac','#f06292','#ffb74d','#a1887f'];
+function getTypeColor(typeId) {
+	var idx = HUNT_TYPES.findIndex(function(t){ return t.id === typeId; });
+	return TYPE_COLORS[idx < 0 ? 0 : idx % TYPE_COLORS.length];
+}
+
+var huntMatches = [];
+var excludedTypes = new Set();
+var parseTimer = null;
+
+$(document).ready(function() {
+
+	$.getJSON('/api/v1/hunt/types', function(types) { HUNT_TYPES = types; });
+
+	// Auto-select "All hosts" (data-id 9)
+	setTimeout(function() {
+		$('.fe-dropdown__item-link-text[data-id="9"]').first()
+			.closest('.fe-dropdown__item-link').trigger('click');
+	}, 400);
+
+	$('#hunt-input').on('input scroll', function() {
+		syncScroll();
+		clearTimeout(parseTimer);
+		parseTimer = setTimeout(runParse, 300);
+	});
+	$('#hunt-parse-btn').click(function() { clearTimeout(parseTimer); runParse(); });
+
+	$('#hunt-clear-btn').click(function() {
+		$('#hunt-input').val('');
+		huntMatches = [];
+		excludedTypes = new Set();
+		document.getElementById('hunt-highlight').innerHTML = '';
+		renderSummary([]);
+		$('#hunt-groups-section').hide();
+		$('#hunt-groups-body').html('');
+		$('#hunt-submit-btn').prop('disabled', true);
+	});
+
+	// Schedule collapse
+	$('#hunt-sched-toggle').click(function() {
+		var open = $('#hunt-sched-at').is(':visible');
+		if (open) {
+			$('#hunt-sched-at').slideUp(150);
+			$('#hunt-sched-chevron').css('transform', '');
+			$('input[name="hunt_schedule"][value="run_now"]').prop('checked', true);
+		} else {
+			$('#hunt-sched-at').slideDown(150);
+			$('#hunt-sched-chevron').css('transform', 'rotate(90deg)');
+			$('#hunt-sched-at-radio').prop('checked', true);
+			$('#hunt-run-at-value').focus();
+		}
+	});
+	$('#hunt-run-at-value').on('focus click', function() {
+		$('#hunt-sched-at-radio').prop('checked', true);
+	});
+
+	// Chip toggles
+	$(document).on('click', '.hunt-chip', function() {
+		var typeId = $(this).data('type');
+		if (excludedTypes.has(typeId)) {
+			excludedTypes.delete(typeId);
+			$(this).css({'opacity': '1', 'text-decoration': ''});
+			$('.hunt-ioc-group[data-type="' + typeId + '"]').css('opacity', '1');
+			$('.hunt-ioc-check[data-type="' + typeId + '"]').prop('checked', true);
+		} else {
+			excludedTypes.add(typeId);
+			$(this).css({'opacity': '0.35', 'text-decoration': 'line-through'});
+			$('.hunt-ioc-group[data-type="' + typeId + '"]').css('opacity', '0.35');
+			$('.hunt-ioc-check[data-type="' + typeId + '"]').prop('checked', false);
+		}
+		$('#hunt-submit-btn').prop('disabled', $('.hunt-ioc-check:checked').length === 0);
+	});
+
+	$('#hunt-groups-toggle').click(function() {
+		$('#hunt-groups-body').slideToggle(150);
+		$(this).find('.fa-chevron-down').toggleClass('fa-rotate-180');
+	});
+
+	$('#hunt-submit-btn').click(submitHunt);
+
+	// Preview modal
+	$('#hunt-show-btn').click(function() { openPreviewModal(); });
+	$('#hunt-modal-close').click(function() { closeModal(); });
+	$('#hunt-modal').click(function(e) { if (e.target === this) closeModal(); });
+	$(document).keydown(function(e) { if (e.key === 'Escape') closeModal(); });
+
+	// Copy button (delegated)
+	$(document).on('click', '.api-copy-btn', function() {
+		var payload = $(this).data('payload');
+		try {
+			navigator.clipboard.writeText(payload);
+			var $btn = $(this);
+			$btn.html('<i class="fas fa-check fe-icon--left"></i>Copied');
+			setTimeout(function() { $btn.html('<i class="fas fa-copy fe-icon--left"></i>Copy payload'); }, 1800);
+		} catch(e) {}
+	});
+});
+
+/* ── Parse / Highlight ── */
+function syncScroll() {
+	var ta = document.getElementById('hunt-input');
+	var hl = document.getElementById('hunt-highlight');
+	hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
+}
+function escHtml(s) {
+	return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function parseHuntFreeText(text) {
+	var results = [];
+	var lines = text.split('\n');
+	for (var li = 0; li < lines.length; li++) {
+		var line = lines[li];
+		var covered = [];
+		for (var ti = 0; ti < HUNT_TYPES.length; ti++) {
+			var ht = HUNT_TYPES[ti];
+			for (var ri = 0; ri < (ht.regexes || []).length; ri++) {
+				var rx = new RegExp(ht.regexes[ri], 'g'), m;
+				while ((m = rx.exec(line)) !== null) {
+					var s = m.index, e = m.index + m[0].length;
+					if (!covered.some(function(r){ return s < r.e && e > r.s; })) {
+						var raw = m[1] !== undefined ? m[1] : m[0];
+						var fn = HUNT_NORMALIZERS[ht.normalizer] || HUNT_NORMALIZERS['none'];
+						results.push({ typeId: ht.id, typeName: ht.name, raw: raw, normalized: fn(raw), lineIdx: li, start: s, end: e });
+						covered.push({ s: s, e: e });
+					}
+				}
+			}
+		}
+	}
+	return results;
+}
+
+function buildHighlightLine(line, lineMatches) {
+	if (!lineMatches.length) return escHtml(line);
+	lineMatches.sort(function(a,b){ return a.start - b.start; });
+	var out = '', pos = 0;
+	lineMatches.forEach(function(m) {
+		if (m.start > pos) out += escHtml(line.slice(pos, m.start));
+		var color = getTypeColor(m.typeId);
+		out += '<mark style="background:' + color + '38; border-bottom:2px solid ' + color + ';">';
+		out += escHtml(line.slice(m.start, m.end)) + '</mark>';
+		pos = m.end;
+	});
+	if (pos < line.length) out += escHtml(line.slice(pos));
+	return out;
+}
+
+function renderHighlight(text, matches) {
+	var lines = text.split('\n');
+	document.getElementById('hunt-highlight').innerHTML = lines.map(function(line, li) {
+		return buildHighlightLine(line, matches.filter(function(m){ return m.lineIdx === li; }));
+	}).join('\n');
+}
+
+function renderSummary(matches) {
+	if (!matches.length) {
+		$('#hunt-summary').html('<span style="color:#4a6070; font-size:12px;">No IOCs detected &mdash; paste indicators above and click Parse.</span>');
+		return;
+	}
+	var counts = {};
+	matches.forEach(function(m){ counts[m.typeId] = (counts[m.typeId]||0)+1; });
+	var html = '';
+	HUNT_TYPES.forEach(function(ht, idx) {
+		if (!counts[ht.id]) return;
+		var c = TYPE_COLORS[idx % TYPE_COLORS.length];
+		var ex = excludedTypes.has(ht.id);
+		html += '<span class="hunt-chip" data-type="'+ht.id+'" title="Click to include/skip this type"'
+			+ ' style="background:'+c+'22; border:1px solid '+c+'; color:'+c+';'
+			+ (ex ? ' opacity:0.35; text-decoration:line-through;' : '') + '">'
+			+ escHtml(ht.name)+' &times;'+counts[ht.id]+'</span>';
+	});
+	$('#hunt-summary').html(html);
+}
+
+function renderGroups(matches) {
+	if (!matches.length) { $('#hunt-groups-section').hide(); return; }
+	var groups = {};
+	matches.forEach(function(m) {
+		if (!groups[m.typeId]) groups[m.typeId] = { typeName: m.typeName, values: [] };
+		var vals = groups[m.typeId].values;
+		if (!vals.includes(m.normalized)) vals.push(m.normalized);
+	});
+	var html = '';
+	Object.keys(groups).forEach(function(typeId) {
+		var g = groups[typeId], c = getTypeColor(typeId);
+		var ex = excludedTypes.has(typeId);
+		html += '<div class="hunt-ioc-group" data-type="'+typeId+'" style="border-color:'+c+'; opacity:'+(ex?'0.35':'1')+';">';
+		html += '<div class="hunt-ioc-group-label" style="color:'+c+'">'+escHtml(g.typeName)+'</div>';
+		g.values.forEach(function(v) {
+			html += '<div class="hunt-ioc-item"><input type="checkbox" class="hunt-ioc-check" data-type="'+typeId+'" data-value="'+escHtml(v)+'"'+(ex?'':' checked')+'><span>'+escHtml(v)+'</span></div>';
+		});
+		html += '</div>';
+	});
+	$('#hunt-groups-body').html(html);
+	$('#hunt-groups-section').show();
+}
+
+function runParse() {
+	var text = $('#hunt-input').val();
+	huntMatches = parseHuntFreeText(text);
+	renderHighlight(text, huntMatches);
+	renderSummary(huntMatches);
+	renderGroups(huntMatches);
+	$('#hunt-submit-btn').prop('disabled', huntMatches.length === 0);
+}
+
+/* ── Submit ── */
+function submitHunt() {
+	var groups = {};
+	$('.hunt-ioc-check:checked').each(function() {
+		var t = $(this).data('type'), v = $(this).data('value');
+		if (!groups[t]) groups[t] = [];
+		if (!groups[t].includes(v)) groups[t].push(v);
+	});
+
+	var hostsetId = $('#huntHostset').data('id');
+	if (!hostsetId || hostsetId === '__hxtool_not_set' || hostsetId === false || hostsetId === 'false') {
+		$('#hxtoolMessageBody').html('<span style="color:#ea475b;">Please select a host set first.</span>');
+		$('#hxtoolMessage').show();
+		return;
+	}
+
+	var schedVal = $("input[name='hunt_schedule']:checked").val() || 'run_now';
+	var payload = {
+		groups: Object.keys(groups).map(function(t){ return { typeId: t, values: groups[t] }; }),
+		sweephostset: String(hostsetId),
+		schedule: schedVal,
+	};
+	if (schedVal === 'run_at') payload.run_at_value = $('#hunt-run-at-value').val();
+
+	$('#hunt-submit-btn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin fe-icon--left"></i>Hunting&hellip;');
+
+	$.ajax({
+		type: 'POST', url: '/api/v1/hunt/submit',
+		contentType: 'application/json', data: JSON.stringify(payload),
+		success: function(resp) {
+			$('#hunt-submit-btn').prop('disabled', false).html('<i class="fas fa-rocket fe-icon--left"></i>Hunt');
+			var s = resp.created !== 1 ? 'es' : '';
+			var msg = '<strong>' + resp.created + ' hunt search' + s + ' submitted.</strong>';
+			if (resp.failed && resp.failed.length)
+				msg += ' <span style="color:#ea475b;">(' + resp.failed.join(', ') + ' had no matching HX fields)</span>';
+			$('#hxtoolMessageBody').html(msg);
+			$('#hxtoolMessage').show();
+		},
+		error: function() {
+			$('#hunt-submit-btn').prop('disabled', false).html('<i class="fas fa-rocket fe-icon--left"></i>Hunt');
+			hxtoolActionFail();
+		},
+	});
+}
+
+/* ── API Preview Modal ── */
+function buildQueryArray(typeId, values) {
+	var ht = HUNT_TYPES.find(function(t) { return t.id === typeId; });
+	if (!ht || !ht.query_fields) return [];
+	var query = [];
+	values.forEach(function(val) {
+		(ht.query_fields || []).forEach(function(qf) {
+			query.push({ field: qf.field, operator: qf.operator, value: val });
+		});
+	});
+	return query;
+}
+
+function formatJsonHighlighted(obj) {
+	var json = JSON.stringify(obj, null, 2);
+	// Colorise: keys, strings, numbers
+	return json.replace(/("(?:[^"\\]|\\.)*")(\s*:)?|(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(\btrue\b|\bfalse\b|\bnull\b)|([{}\[\],])/g,
+		function(match, strMaybeKey, colon, num, bool, punct) {
+			if (strMaybeKey !== undefined) {
+				return colon
+					? '<span class="jk">' + escHtml(strMaybeKey) + '</span>' + escHtml(colon)
+					: '<span class="js">' + escHtml(strMaybeKey) + '</span>';
+			}
+			if (num !== undefined) return '<span class="jn">' + escHtml(num) + '</span>';
+			if (bool !== undefined) return '<span class="jn">' + escHtml(bool) + '</span>';
+			if (punct !== undefined) return '<span class="jp">' + escHtml(punct) + '</span>';
+			return escHtml(match);
+		}
+	);
+}
+
+function openPreviewModal() {
+	// Collect checked IOCs
+	var groups = {};
+	$('.hunt-ioc-check:checked').each(function() {
+		var t = $(this).data('type'), v = $(this).data('value');
+		if (!groups[t]) groups[t] = [];
+		if (!groups[t].includes(v)) groups[t].push(v);
+	});
+
+	var hostsetId = $('#huntHostset').data('id') || 0;
+	var hostsetName = $('#huntHostset .fe-dropdown__label-text').text().trim() || 'All hosts';
+	var ts = (function() {
+		var d = new Date();
+		return d.getUTCFullYear()
+			+ pad2(d.getUTCMonth()+1) + pad2(d.getUTCDate())
+			+ pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds());
+	})();
+
+	var typeIds = Object.keys(groups);
+
+	var html = '';
+
+	if (!typeIds.length) {
+		html = '<div class="api-empty">'
+			+ '<i class="fas fa-info-circle" style="font-size:22px; color:#2e4053; display:block; margin-bottom:8px;"></i>'
+			+ 'No IOCs selected. Paste indicators into the text area, click <strong>Parse IOCs</strong>, then try again.'
+			+ '</div>';
+	} else {
+		typeIds.forEach(function(typeId) {
+			var values = groups[typeId];
+			var ht = HUNT_TYPES.find(function(t) { return t.id === typeId; });
+			var typeName = ht ? ht.name : typeId.toUpperCase();
+			var color = getTypeColor(typeId);
+			var displayname = 'HUNT_' + typeId + '_' + ts;
+			var query = buildQueryArray(typeId, values);
+
+			var payload = {
+				host_set: { _id: parseInt(hostsetId) || 0 },
+				displayname: displayname,
+				query: query,
+			};
+			var payloadStr = JSON.stringify(payload, null, 2);
+
+			html += '<div class="api-card" style="border-left: 3px solid ' + color + ';">';
+
+			// Header row
+			html += '<div class="api-card-hdr">';
+			html += '<span class="api-card-method">POST</span>';
+			html += '<span class="api-card-url">/hx/api/v3/searches</span>';
+			html += '<span class="api-card-type-badge" style="background:' + color + '22; color:' + color + '; border:1px solid ' + color + ';">'
+				+ escHtml(typeName) + ' &bull; ' + values.length + ' value' + (values.length !== 1 ? 's' : '') + '</span>';
+			html += '</div>';
+
+			// JSON body
+			html += '<div class="api-card-body">';
+			html += '<div style="font-size:10px; color:#4a6070; margin-bottom:4px; font-weight:600; letter-spacing:.05em;">REQUEST BODY</div>';
+			html += '<pre class="api-json-block">' + formatJsonHighlighted(payload) + '</pre>';
+			html += '<button class="fe-btn fe-btn--sm fe-btn--secondary api-copy-btn" data-payload="' + escHtml(payloadStr) + '">'
+				+ '<i class="fas fa-copy fe-icon--left"></i>Copy payload</button>';
+			html += '</div>';
+
+			html += '</div>';
+		});
+
+		// Summary note
+		html += '<div style="font-size:11px; color:#4a6070; margin-top:4px; padding: 0 2px;">'
+			+ '<i class="fas fa-info-circle" style="margin-right:4px;"></i>'
+			+ typeIds.length + ' search request' + (typeIds.length !== 1 ? 's' : '')
+			+ ' will be submitted to <strong style="color:#6b8fa8;">' + escHtml(hostsetName) + '</strong> (host_set._id&nbsp;=&nbsp;' + (parseInt(hostsetId)||0) + ').'
+			+ ' Click <strong style="color:#c9d8e4;">Hunt</strong> to execute.'
+			+ '</div>';
+	}
+
+	$('#hunt-modal-body').html(html);
+	$('#hunt-modal').fadeIn(150);
+}
+
+function closeModal() {
+	$('#hunt-modal').fadeOut(150);
+}
+
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+</script>
+
+<!-- ── API Preview Modal ── -->
+<div id="hunt-modal">
+	<div id="hunt-modal-box">
+		<div id="hunt-modal-hdr">
+			<i class="fas fa-code" style="color:#4fc3f7; font-size:13px;"></i>
+			<span style="font-size:13px; font-weight:700; color:#c9d8e4;">Search API Preview</span>
+			<span style="font-size:11px; color:#4a6070; margin-left:4px;">— payloads that will be sent on Hunt</span>
+			<button id="hunt-modal-close" class="fe-btn fe-btn--sm fe-btn--secondary" style="margin-left:auto; padding:4px 10px;">
+				<i class="fas fa-times"></i>
+			</button>
+		</div>
+		<div id="hunt-modal-body">
+			<div style="padding:24px; color:#6b8fa8; font-size:13px; text-align:center;">Parse some IOCs first.</div>
+		</div>
+	</div>
+</div>
+
+<!-- ── Main page ── -->
+<div id="hunt-container">
+
+	<div class="fe-panel-header fe-panel-header--no-background" style="flex-shrink:0; margin-bottom:8px;">
+		<div class="fe-label fe-label--background">
+			<i class="fe-icon--left fas fa-search"></i>IOC Hunt
+		</div>
+	</div>
+
+	<div id="hunt-body">
+
+		<div id="hunt-left">
+			<div style="font-size:11px; color:#c9d8e4; margin-bottom:4px;">
+				Paste raw threat intel &mdash; hashes, IPs, domains, URLs, registry keys, file paths, command lines. Mixed content is fine.
+			</div>
+
+			<div id="hunt-wrap">
+				<div id="hunt-highlight" aria-hidden="true"></div>
+				<textarea id="hunt-input"
+					placeholder="Paste IOCs here...&#10;e.g. 8.8.8.8&#10;evil.example[.]com&#10;44d88612fea8a8f36de82e1278abb02f&#10;HKLM\SOFTWARE\evil\key"></textarea>
+			</div>
+
+			<div id="hunt-toolbar">
+				<button id="hunt-parse-btn" class="fe-btn fe-btn--sm fe-btn--secondary">
+					<i class="fas fa-magic fe-icon--left"></i>Parse IOCs
+				</button>
+				<button id="hunt-clear-btn" class="fe-btn fe-btn--sm fe-btn--secondary">
+					<i class="fas fa-times fe-icon--left"></i>Clear
+				</button>
+			</div>
+
+			<div id="hunt-summary"></div>
+
+			<div id="hunt-groups-section">
+				<div id="hunt-groups-toggle" style="display:flex; align-items:center; gap:6px; cursor:pointer; padding:2px 0 4px; user-select:none;">
+					<i class="fas fa-list-ul" style="color:#4fc3f7; font-size:11px;"></i>
+					<span style="font-size:11px; font-weight:600; color:#8ab4c4;">Extracted IOCs</span>
+					<i class="fas fa-chevron-down" style="font-size:9px; color:#4a6070; transition:transform 0.15s;"></i>
+				</div>
+				<div id="hunt-groups-body"></div>
+			</div>
+		</div>
+
+		<!-- ── Right panel ── -->
+		<div id="hunt-right">
+
+			<div class="hunt-right-section">
+				<div class="hunt-right-label">Target Host Set</div>
+				{{ htDropdown.widgetHeader("All hosts", "huntHostset", "9") }}
+					{% if hostsets %} {{ hostsets|safe }} {% endif %}
+				{{ htDropdown.widgetFooter(elementLabel="Select the target host set") }}
+			</div>
+
+			<div class="hunt-right-section">
+				<div class="hunt-right-label">Schedule</div>
+				<label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-bottom:4px;">
+					<input type="radio" name="hunt_schedule" value="run_now" checked> Run Now
+				</label>
+				<div id="hunt-sched-toggle">
+					<i class="fas fa-chevron-right fa-xs" id="hunt-sched-chevron" style="transition:transform 0.2s;"></i>
+					Run at a specific date/time
+				</div>
+				<div id="hunt-sched-at">
+					<label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+						<input type="radio" name="hunt_schedule" value="run_at" id="hunt-sched-at-radio">
+						<span style="font-size:11px; color:#8ab4c4;">Date &amp; time</span>
+					</label>
+					<input type="datetime-local" id="hunt-run-at-value">
+				</div>
+			</div>
+
+			<button id="hunt-submit-btn" class="fe-btn fe-btn--md fe-btn--primary" disabled
+				style="width:100%; margin-bottom:6px;">
+				<i class="fas fa-rocket fe-icon--left"></i>Hunt
+			</button>
+			<button id="hunt-show-btn" class="fe-btn fe-btn--md fe-btn--secondary" style="width:100%;">
+				<i class="fas fa-code fe-icon--left"></i>Show Hunt Searches
+			</button>
+
+		</div>
+
+	</div>
+</div>
+
+{% endblock %}

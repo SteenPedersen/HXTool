@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import xml.etree.ElementTree as ET
 import hashlib
 try:
 	from pandas import DataFrame
 except ImportError:
-	print("hxtool_data_models requires the 'pandas' module, please install it.")
+	import sys; sys.stderr.write("hxtool_data_models requires the 'pandas' module, please install it.\n")
 	exit(1)
 
 class hxtool_data_models:

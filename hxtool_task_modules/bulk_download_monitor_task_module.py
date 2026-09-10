@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from .task_module import *
 import hxtool_global
@@ -83,7 +82,7 @@ class bulk_download_monitor_task_module(task_module):
 									
 									download_and_process_task = self.parent_task.__class__(
 																	self.parent_task.profile_id, 
-																	'Bulk Acquisition Download: {}'.format(bulk_host['host']['_id']), 
+																	f"Bulk Acquisition Download: {bulk_host['host']['_id']}", 
 																	parent_id = self.parent_task.parent_id,
 																	wait_for_parent = False,
 																	start_time = self.parent_task.start_time,
@@ -172,12 +171,12 @@ class bulk_download_monitor_task_module(task_module):
 						else:
 							self.logger.error("Failed to get bulk acquisition job host status for ID {}.".format(bulk_download_job['bulk_acquisition_id']))
 					else:
-						self.logger.error("No task API session for profile: {}".format(self.parent_task.profile_id))
+						self.logger.error(f"No task API session for profile: {self.parent_task.profile_id}")
 				else:
-					self.logger.warning("Bulk download database entry {} is marked as stopped.".format(bulk_download_eid))
+					self.logger.warning(f"Bulk download database entry {bulk_download_eid} is marked as stopped.")
 					self.parent_task.stop()
 			else:
-				self.logger.error("Bulk download database entry {} doesn't exist.".format(bulk_download_eid))
+				self.logger.error(f"Bulk download database entry {bulk_download_eid} doesn't exist.")
 				self.parent_task.stop()
 		except Exception as e:
 			self.logger.error(pretty_exceptions(e))

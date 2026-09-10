@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # OpenIOC to Endpoint Security (HX) conversion code courtesy of Matthew Dunwoody
 
@@ -176,13 +175,13 @@ def process_ioc(ioc, platform_fallback=[]):
 	ind = generate_indicator(root, platform_fallback)
 	try: 
 		ind['display_name'].encode('ascii')
-	except:
+	except UnicodeEncodeError:
 		logger.warning('Unicode name identified in IOC ' + root.get('id') + '. Skipping, please rename using ASCII.')
 		return None
 
 	indicator[indicator_id].update(ind)
 	
-	with open(combine_app_path('static', 'eventbuffer.json'), 'r') as f:
+	with open(combine_app_path('static', 'eventbuffer.json')) as f:
 		valid_tokens = list(json.load(f).keys())
 		f.close()
 	
@@ -216,5 +215,5 @@ def openioc_to_hxioc(xml_content, platform_fallback=[]):
 		openioc_xml = et.ElementTree(et.fromstring(xml_content))
 		return process_ioc(openioc_xml, platform_fallback)
 	except Exception as e:
-		logger.warning('OpenIOC 1.1 indicator parsing failed with exception: {}'.format(e))
+		logger.warning(f'OpenIOC 1.1 indicator parsing failed with exception: {e}')
 		return None

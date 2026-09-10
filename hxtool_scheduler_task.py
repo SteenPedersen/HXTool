@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import threading
 import datetime
@@ -14,7 +13,7 @@ from hx_lib import HXAPI
 
 logger = hxtool_logging.getLogger(__name__)
 
-class task_states(object):
+class task_states:
 	TASK_STATE_SCHEDULED = 0
 	TASK_STATE_QUEUED = 1
 	TASK_STATE_RUNNING = 2
@@ -78,7 +77,7 @@ class hxtool_scheduler_task:
 		if self.state == task_states.TASK_STATE_PENDING_DELETION or (self.state == task_states.TASK_STATE_FAILED and self.stop_on_fail):
 			return
 		elif self.state == task_states.TASK_STATE_QUEUED or self.state == task_states.TASK_STATE_RUNNING:
-			logger.critical("Task ID {} calculating next run while still running, this should never happen!".format(self.task_id))
+			logger.critical(f"Task ID {self.task_id} calculating next run while still running, this should never happen!")
 	
 		# Reset microseconds to keep things from drifting
 		now = datetime.datetime.utcnow().replace(microsecond=1)
@@ -154,10 +153,10 @@ class hxtool_scheduler_task:
 				self.next_run = None
 				
 				for module, func, args, kwargs in self.steps:
-					logger.debug("Have module: {}, function: {}".format(module.__module__, func))
+					logger.debug(f"Have module: {module.__module__}, function: {func}")
 					if getattr(module, 'hxtool_task_module', lambda: False)():
 						if module.enabled == False:
-							logger.error("Module {} is disabled!".format(module.__module__))
+							logger.error(f"Module {module.__module__} is disabled!")
 							ret = False
 							self.state = task_states.TASK_STATE_FAILED
 							break
@@ -172,9 +171,9 @@ class hxtool_scheduler_task:
 									self.state = task_states.TASK_STATE_FAILED
 									break
 					if self.state != task_states.TASK_STATE_FAILED:
-						logger.debug("Begin execute {}.{}".format(module.__module__, func))
+						logger.debug(f"Begin execute {module.__module__}.{func}")
 						result = getattr(module, func)(*args, **kwargs)
-						logger.debug("End execute {}.{}".format(module.__module__, func))
+						logger.debug(f"End execute {module.__module__}.{func}")
 						if isinstance(result, tuple) and len(result) > 1:
 							ret = result[0]
 							# Store the result - make sure it is of type dict
@@ -182,7 +181,7 @@ class hxtool_scheduler_task:
 								# Use update so we don't clobber existing values
 								self.stored_result.update(result[1])
 							elif result[1] is not None:
-								logger.error("Task module {} returned a value that was not a dictionary or None. Discarding the result.".format(module.__module__))
+								logger.error(f"Task module {module.__module__} returned a value that was not a dictionary or None. Discarding the result.")
 						else:
 							ret = result
 					
@@ -230,7 +229,7 @@ class hxtool_scheduler_task:
 
 	def parent_state_callback(self, parent_task_id, parent_state, parent_stored_result):
 		if self.parent_id == parent_task_id:
-			logger.debug("parent_state_callback(): task_id = {}, parent_id = {}, parent_state = {}".format(self.task_id, parent_task_id, parent_state))
+			logger.debug(f"parent_state_callback(): task_id = {self.task_id}, parent_id = {parent_task_id}, parent_state = {parent_state}")
 			if parent_state == task_states.TASK_STATE_COMPLETE:
 				logger.debug("Received signal that parent task is complete.")
 				with self._lock:
@@ -246,7 +245,7 @@ class hxtool_scheduler_task:
 			elif parent_state == task_states.TASK_STATE_FAILED:
 				self.set_state(task_states.TASK_STATE_FAILED)
 			
-			logger.debug("name = {}, next_run = {}".format(self.name, self.next_run))
+			logger.debug(f"name = {self.name}, next_run = {self.next_run}")
 
 				
 	def stop(self):
@@ -271,7 +270,7 @@ class hxtool_scheduler_task:
 			hxtool_global.hxtool_db.taskUpdate(self.profile_id, self.task_id, self.serialize())
 	
 	def unstore(self):
-		logger.debug("Deleting task_id = {} from DB".format(self.task_id))
+		logger.debug(f"Deleting task_id = {self.task_id} from DB")
 		hxtool_global.hxtool_db.taskDelete(self.profile_id, self.task_id)
 		self.set_stored(stored = False)
 	
@@ -340,4 +339,3 @@ class hxtool_scheduler_task:
 		return task
 									
 									
-		

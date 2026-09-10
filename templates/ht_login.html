@@ -15,14 +15,34 @@
 	<link href="/static/fe-fds/fds-dark.css" rel="stylesheet" />
 	<link rel="stylesheet" type="text/css" href="static/hxtool-css/hxtool-main.css">
 	<link href="/static/favicon.ico" rel="icon" type="image/x-icon" />
+	<style>
+		#profileRemove .fe-modal__dialog {
+			width: min(1200px, 96vw);
+			max-width: 96vw;
+			min-width: 600px;
+			resize: both;
+			overflow: auto;
+		}
+		#profileRemove .fe-modal__header {
+			cursor: move;
+			user-select: none;
+		}
+		#profileRemove .fe-modal__body {
+			overflow-x: auto;
+		}
+	</style>
 </head>
 
 <script language="JavaScript">
 
+	var _profiles = {};  // profile_id -> {hx_name, hx_host, hx_port}
+
 	function getProfiles() {
 		hxtool_ajax_get_request("/api/v1/profile", "", function(myprofiles) {
+			_profiles = {};
 			$("#profile").next("div").find("ul").html("");
 			$.each(myprofiles.data, function() {
+				_profiles[this.profile_id] = {hx_name: this.hx_name, hx_host: this.hx_host, hx_port: this.hx_port};
 				$("#profile").next("div").find("ul").append("<li class='fe-dropdown__item'><a class='fe-dropdown__item-link'><span class='fe-dropdown__item-link-left-section'><i style='margin-top: 2px;' class='fas fa-check fa-lg'></i></span><span class='fe-dropdown__item-link-text' data-id='" + this.profile_id + "'>" + this.hx_name + "</span></a></li>");
 			});
 			$("#profile").html(" " + myprofiles.data[0]['hx_name'] + " <i class='fe-icon--right fas fa-chevron-up'></i>");
@@ -30,6 +50,62 @@
 		});
 	}
 	
+	var _loginStatusTimer = null;
+
+	function showLoginSpinner(profile) {
+		var steps = [
+			{delay: 0,    icon: 'fa-plug',           text: 'Connecting to ' + profile.hx_host + ':' + profile.hx_port + '…'},
+			{delay: 2000, icon: 'fa-lock',            text: 'Establishing secure connection…'},
+			{delay: 5000, icon: 'fa-key',             text: 'Sending credentials…'},
+			{delay: 9000, icon: 'fa-hourglass-half',  text: 'Waiting for response…'},
+			{delay: 14000,icon: 'fa-hourglass-end',   text: 'Still waiting—controller is slow to respond.'},
+		];
+
+		var safeHost = $('<span>').text(profile.hx_host + ':' + profile.hx_port).html();
+		var safeName = $('<span>').text(profile.hx_name).html();
+
+		$("#loginProgressBody").html(
+			'<i class="fas fa-circle-notch fa-spin" style="font-size:2rem; color:#11a962; display:block; margin-bottom:18px;"></i>' +
+			'<div style="font-size:15px; font-weight:600; margin-bottom:4px;">Logging in to ' + safeName + '</div>' +
+			'<div style="font-size:12px; color:rgba(255,255,255,0.45); margin-bottom:18px;">' + safeHost + '</div>' +
+			'<div id="loginStatusLine" style="font-size:12px; color:rgba(255,255,255,0.6); min-height:1.4em;"></div>'
+		);
+		$("#loginProgressOverlay").css("display", "flex");
+
+		if (_loginStatusTimer) clearInterval(_loginStatusTimer);
+		var stepIdx = 0;
+		function applyStep(i) {
+			var s = steps[i];
+			$("#loginStatusLine").html(
+				'<i class="fas ' + s.icon + '" style="margin-right:6px; color:rgba(255,255,255,0.4);"></i>' + s.text
+			);
+		}
+		applyStep(0);
+		_loginStatusTimer = setInterval(function() {
+			stepIdx++;
+			if (stepIdx < steps.length) applyStep(stepIdx);
+			else clearInterval(_loginStatusTimer);
+		}, steps[1].delay);
+
+		// Use individual step delays instead of uniform interval
+		clearInterval(_loginStatusTimer);
+		_loginStatusTimer = null;
+		steps.forEach(function(s, i) {
+			if (i === 0) return;
+			setTimeout(function() { applyStep(i); }, s.delay);
+		});
+	}
+
+	function showLoginError(msg) {
+		$("#loginProgressBody").html(
+			'<div style="font-size:2rem; color:#ea475b; margin-bottom:12px;">&#9888;</div>' +
+			'<div style="font-size:15px; font-weight:600; margin-bottom:10px;">Login failed</div>' +
+			'<div style="font-size:13px; color:rgba(255,255,255,0.75); margin-bottom:22px; line-height:1.5;">' + $('<span>').text(msg).html() + '</div>' +
+			'<button class="fe-btn fe-btn--sm fe-btn--secondary" onclick="$(\'#loginProgressOverlay\').hide()"><span>Dismiss</span></button>'
+		);
+		$("#loginProgressOverlay").css("display", "flex");
+	}
+
 	$(document).ready(function() {
 		getProfiles();
 		hxtool_doc_ready();
@@ -44,29 +120,196 @@
 			});
 		});
 
-		$("#login_submit").click(function() {
-			$("#controllerProfileDropdown").val($("#profile").data("id"));
-			$("#login_form").submit();
+		$("#login_submit").click(function(e) {
+			e.preventDefault();
+			var pid = $("#profile").data("id");
+			var profile = _profiles[pid] || {hx_name: $("#profile").text().trim(), hx_host: '?', hx_port: ''};
+			showLoginSpinner(profile);
+			$.ajax({
+				type: "POST",
+				url: "/login" + window.location.search,
+				data: {
+					ht_user: $("#ht_user").val(),
+					ht_pass: $("#ht_pass").val(),
+					controllerProfileDropdown: pid
+				},
+				headers: {"X-Requested-With": "XMLHttpRequest"},
+				dataType: "json",
+				timeout: 22000,
+				success: function(r) {
+					window.location.href = r.redirect || "/";
+				},
+				error: function(xhr, status) {
+					var msg;
+					if (status === "timeout") {
+						msg = "Connection timed out. Check that " + profile.hx_host + ":" + profile.hx_port + " is reachable and the port is correct.";
+					} else if (xhr.responseJSON && xhr.responseJSON.message) {
+						msg = xhr.responseJSON.message;
+					} else {
+						msg = "Login failed. (" + (status || xhr.status) + ")";
+					}
+					showLoginError(msg);
+				}
+			});
 		})
 
+		var _profileEditData = {};
+
+		function normalizeHostname(val) {
+			val = val.trim();
+			if (!val) return val;
+			try {
+				if (!/^https?:\/\//i.test(val)) val = "https://" + val;
+				return new URL(val).hostname;
+			} catch(e) {
+				return val.replace(/^https?:\/\//i, '').split('/')[0];
+			}
+		}
+
+		function profileActionButtons(pid) {
+			var $editBtn = $("<button type='button' class='profileEditClass fe-btn fe-btn--sm fe-btn--secondary' style='margin-right:4px;'>edit <i class='fe-icon--right fas fa-edit'></i></button>").data("id", pid);
+			var $dupBtn  = $("<button type='button' class='profileDupClass fe-btn fe-btn--sm fe-btn--secondary' style='margin-right:4px;'>duplicate <i class='fe-icon--right fas fa-copy'></i></button>").data("id", pid);
+			var $removeBtn = $("<button type='button' class='profileRemoveClass fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main-remove'>remove <i class='fe-icon--right fas fa-trash'></i></button>").data("id", pid);
+			return $("<span>").append($editBtn).append($dupBtn).append($removeBtn).contents();
+		}
+
+		function renderCredCell($cell, pid, d) {
+			var wrap = 'style="display:flex; align-items:center; justify-content:space-between; gap:8px; white-space:nowrap;"';
+			if (d.has_credential) {
+				var safeUser = $('<span>').text(d.username).html();
+				$cell.html(
+					'<div ' + wrap + '>' +
+					'<span><span style="color:#11a962; margin-right:5px;">&#10003;</span>' +
+					'<span class="cred-username" style="font-size:12px;">' + safeUser + '</span></span>' +
+					'<span>' +
+					'<button type="button" class="credEditClass fe-btn fe-btn--sm fe-btn--secondary" data-id="' + pid + '" style="margin-right:4px;">edit <i class="fe-icon--right fas fa-key"></i></button>' +
+					'<button type="button" class="credClearClass fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main-remove" data-id="' + pid + '">clear <i class="fe-icon--right fas fa-trash"></i></button>' +
+					'</span></div>'
+				);
+			} else {
+				$cell.html(
+					'<div ' + wrap + '>' +
+					'<span style="color:rgba(255,255,255,0.3); font-size:12px;">not set</span>' +
+					'<button type="button" class="credSetClass fe-btn fe-btn--sm fe-btn--secondary" data-id="' + pid + '">set <i class="fe-icon--right fas fa-key"></i></button>' +
+					'</div>'
+				);
+			}
+		}
+
+		function showCredEdit($cell, pid) {
+			var currentUser = $cell.find(".cred-username").text();
+			$cell.html(
+				'<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; white-space:nowrap;">' +
+				'<span style="display:flex; gap:4px;">' +
+				'<input type="text" class="fe-input fe-input--sm cred-edit-user" placeholder="username" style="width:120px;" value="' + $('<span>').text(currentUser).html() + '">' +
+				'<input type="password" class="fe-input fe-input--sm cred-edit-pass" placeholder="password" style="width:120px;">' +
+				'</span>' +
+				'<span>' +
+				'<button type="button" class="credSaveClass fe-btn fe-btn--sm fe-btn--primary" data-id="' + pid + '" style="margin-right:4px;">save <i class="fe-icon--right fas fa-check"></i></button>' +
+				'<button type="button" class="credCancelCredClass fe-btn fe-btn--sm fe-btn--secondary" data-id="' + pid + '">cancel</button>' +
+				'</span></div>'
+			);
+			$cell.find(".cred-edit-user").focus();
+		}
+
+		$("body").on("click", ".credSetClass, .credEditClass", function() {
+			showCredEdit($(this).closest("td"), $(this).data("id"));
+		});
+
+		$("body").on("click", ".credClearClass", function() {
+			var pid = $(this).data("id");
+			var $cell = $(this).closest("td");
+			if (!confirm("Remove stored credentials for this profile?")) return;
+			$.ajax({
+				type: "DELETE",
+				url: "/api/v1/profile/" + pid + "/credential",
+				success: function() { renderCredCell($cell, pid, {has_credential: false, username: null}); },
+				error: function(xhr) { alert("Error: " + (xhr.responseJSON ? xhr.responseJSON.message : "Unknown")); }
+			});
+		});
+
+		$("body").on("click", ".credSaveClass", function() {
+			var pid = $(this).data("id");
+			var $cell = $(this).closest("td");
+			var username = $cell.find(".cred-edit-user").val().trim();
+			var password = $cell.find(".cred-edit-pass").val();
+			if (!username || !password) { alert("Username and password are required."); return; }
+			$.ajax({
+				type: "PUT",
+				url: "/api/v1/profile/" + pid + "/credential",
+				contentType: "application/json; charset=utf-8",
+				dataType: "json",
+				data: JSON.stringify({username: username, password: password}),
+				success: function() { renderCredCell($cell, pid, {has_credential: true, username: username}); },
+				error: function(xhr) { alert("Error saving credentials: " + (xhr.responseJSON ? xhr.responseJSON.message : "Unknown")); }
+			});
+		});
+
+		$("body").on("click", ".credCancelCredClass", function() {
+			var pid = $(this).data("id");
+			var $cell = $(this).closest("td");
+			$.ajax({
+				type: "GET",
+				url: "/api/v1/profile/" + pid + "/credential",
+				success: function(data) { renderCredCell($cell, pid, typeof data === 'string' ? JSON.parse(data) : data); },
+				error: function() { $cell.html('<span style="color:rgba(255,255,255,0.3);font-size:12px;">error</span>'); }
+			});
+		});
+
 		$("#profile_delete").click(function() {
+			_profileEditData = {};
 			$("#profileRemove").find(".fe-modal__body").html("");
 			hxtool_ajax_get_request("/api/v1/profile", "", function(myprofiles) {
-				$("#profileRemove").find(".fe-modal__body").append("<table style='width: 100%;' class='hxtool_table'></table>");
-				$("#profileRemove").find(".fe-modal__body").find("table").append("<thead><th>name</th><th>hostname</th><th>port</th><th>action</th></thead>");
-				$("#profileRemove").find(".fe-modal__body").find("table").append("<tbody></tbody>");
+				var $table = $("<table style='width:100%;' class='hxtool_table'>");
+				$table.append("<thead><tr><th>name</th><th>hostname</th><th>port</th><th>credentials</th><th>action</th></tr></thead>");
+				var $tbody = $("<tbody>");
 				$.each(myprofiles.data, function() {
-					$("#profileRemove").find(".fe-modal__body").find("table").find("tbody").append("<tr><td>" + this.hx_name  + "</td><td>" + this.hx_host + "</td><td>" + this.hx_port + "</td><td style='text-align: center;'><button type='button' data-id='" + this.profile_id + "' class='profileRemoveClass fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main-remove'>remove<i class='fe-icon--right fas fa-trash'></i></button></td></tr>");
+					var p = this;
+					_profileEditData[p.profile_id] = {hx_name: p.hx_name, hx_host: p.hx_host, hx_port: p.hx_port};
+					var $row = $("<tr>").attr("data-profile-id", p.profile_id);
+					$row.append($("<td class='td-name' style='white-space:nowrap;'>").text(p.hx_name));
+					$row.append($("<td class='td-host' style='white-space:nowrap;'>").text(p.hx_host));
+					$row.append($("<td class='td-port'>").text(p.hx_port));
+					var $credCell = $("<td class='td-cred'>").html('<span style="color:rgba(255,255,255,0.3);font-size:12px;">loading…</span>');
+					$row.append($credCell);
+					(function(cell, pid) {
+						$.ajax({
+							type: "GET",
+							url: "/api/v1/profile/" + pid + "/credential",
+							success: function(data) { renderCredCell(cell, pid, typeof data === 'string' ? JSON.parse(data) : data); },
+							error: function() { cell.html('<span style="color:rgba(255,255,255,0.3);font-size:12px;">unknown</span>'); }
+						});
+					})($credCell, p.profile_id);
+					$row.append($("<td style='text-align:center; white-space:nowrap;'>").append(profileActionButtons(p.profile_id)));
+					$tbody.append($row);
+				});
+				$table.append($tbody);
+				$("#profileRemove").find(".fe-modal__body").append($table);
+				// Reset dialog to centered position, then init drag
+				var $dialog = $("#profileRemove .fe-modal__dialog");
+				$dialog.removeClass("is-draggable").css({position: "", left: "", top: "", margin: ""});
+				$dialog.find(".fe-modal__header").off(".pdrag").on("mousedown.pdrag", function(e) {
+					if ($(e.target).closest("button").length) return;
+					if (!$dialog.hasClass("is-draggable")) {
+						var rect = $dialog[0].getBoundingClientRect();
+						$dialog.addClass("is-draggable").css({position: "fixed", left: rect.left, top: rect.top, margin: 0});
+					}
+					var sx = e.clientX - parseInt($dialog.css("left")),
+					    sy = e.clientY - parseInt($dialog.css("top"));
+					$(document).on("mousemove.pdrag", function(e) {
+						$dialog.css({left: e.clientX - sx, top: e.clientY - sy});
+					}).on("mouseup.pdrag", function() {
+						$(document).off("mousemove.pdrag mouseup.pdrag");
+					});
+					e.preventDefault();
 				});
 				$("#profileRemove").show();
 			});
 		});
 
 		$("body").on("click", ".profileRemoveClass", function(){
-
-			profile_id = $(this).data("id");
-			myrow = $(this).closest("tr");
-
+			var profile_id = $(this).data("id");
+			var myrow = $(this).closest("tr");
 			$.ajax({
 				type: "DELETE",
 				url: "/api/v1/profile/" + profile_id,
@@ -80,7 +323,75 @@
 					alert("Error: " + xhr.responseJSON.message);
 				}
 			});
+		});
 
+		$("body").on("click", ".profileDupClass", function() {
+			var orig = _profileEditData[$(this).data("id")];
+			$.ajax({
+				type: "PUT",
+				url: "/api/v1/profile",
+				contentType: "application/json; charset=utf-8",
+				dataType: "json",
+				data: JSON.stringify({hx_name: orig.hx_name + " (copy)", hx_host: orig.hx_host, hx_port: orig.hx_port}),
+				success: function() {
+					// Reload the manage table and the dropdown
+					$("#profile_delete").trigger("click");
+					getProfiles();
+				},
+				error: function(xhr) {
+					alert("Error duplicating profile: " + (xhr.responseJSON ? xhr.responseJSON.message : "Unknown error"));
+				}
+			});
+		});
+
+		$("body").on("click", ".profileEditClass", function() {
+			var pid = $(this).data("id");
+			var $row = $(this).closest("tr");
+			var orig = _profileEditData[pid];
+			var $hostInput = $("<input type='text' class='fe-input fe-input--sm edit-host' style='width:100%;min-width:100px;'>").val(orig.hx_host)
+				.on("blur", function() { $(this).val(normalizeHostname($(this).val())); });
+			$row.find(".td-name").html($("<input type='text' class='fe-input fe-input--sm edit-name' style='width:100%;min-width:80px;'>").val(orig.hx_name));
+			$row.find(".td-host").html($hostInput);
+			$row.find(".td-port").html($("<input type='text' class='fe-input fe-input--sm edit-port' style='width:60px;'>").val(orig.hx_port));
+			var $saveBtn = $("<button type='button' class='profileSaveClass fe-btn fe-btn--sm fe-btn--primary' style='margin-right:4px;'>save <i class='fe-icon--right fas fa-check'></i></button>").data("id", pid);
+			var $cancelBtn = $("<button type='button' class='profileCancelEditClass fe-btn fe-btn--sm fe-btn--secondary'>cancel</button>").data("id", pid);
+			$(this).closest("td").html("").append($saveBtn).append($cancelBtn);
+		});
+
+		$("body").on("click", ".profileSaveClass", function() {
+			var pid = $(this).data("id");
+			var $row = $(this).closest("tr");
+			var newName = $row.find(".edit-name").val().trim();
+			var newHost = normalizeHostname($row.find(".edit-host").val());
+			var newPort = $row.find(".edit-port").val().trim();
+			$.ajax({
+				type: "PUT",
+				url: "/api/v1/profile/" + pid,
+				contentType: "application/json; charset=utf-8",
+				dataType: "json",
+				data: JSON.stringify({hx_name: newName, hx_host: newHost, hx_port: newPort}),
+				success: function() {
+					_profileEditData[pid] = {hx_name: newName, hx_host: newHost, hx_port: newPort};
+					$row.find(".td-name").text(newName);
+					$row.find(".td-host").text(newHost);
+					$row.find(".td-port").text(newPort);
+					$row.find("td:last").html("").append(profileActionButtons(pid));
+					getProfiles();
+				},
+				error: function(xhr) {
+					alert("Error saving profile: " + (xhr.responseJSON ? xhr.responseJSON.message : "Unknown error"));
+				}
+			});
+		});
+
+		$("body").on("click", ".profileCancelEditClass", function() {
+			var pid = $(this).data("id");
+			var $row = $(this).closest("tr");
+			var orig = _profileEditData[pid];
+			$row.find(".td-name").text(orig.hx_name);
+			$row.find(".td-host").text(orig.hx_host);
+			$row.find(".td-port").text(orig.hx_port);
+			$row.find("td:last").html("").append(profileActionButtons(pid));
 		});
 
 
@@ -92,9 +403,14 @@
 			$("#profileNew").hide();
 		});
 
-		$("#profileRemoveDismiss").click(function() {
+		function closeProfileManage() {
+			$(document).off("mousemove.pdrag mouseup.pdrag");
+			var $dialog = $("#profileRemove .fe-modal__dialog");
+			$dialog.removeClass("is-draggable").css({position: "", left: "", top: "", margin: ""});
 			$("#profileRemove").hide();
-		});
+		}
+		$("#profileRemoveDismiss").click(closeProfileManage);
+		$("body").on("click", "#profileRemove .fe-modal-close", closeProfileManage);
 
 		$("#profileNewSubmit").click(function() {
 
@@ -123,6 +439,10 @@
 
 		});
 
+		$("#profile_new_host").on("blur", function() {
+			$(this).val(normalizeHostname($(this).val()));
+		});
+
 		$("#ht_user").focus();
 
 	});
@@ -133,12 +453,13 @@
 
 	{{ htPanelNoHeader.widgetHeader(panelWidth="500px", elementAdditionalClass="hxtool_login_main") }}
 
-		<div style='padding: 24px;'>
+		<div style='background:#ffffff; border-radius:4px 4px 0 0; padding:28px 24px 22px; text-align:center; border-bottom:1px solid rgba(0,0,0,0.12);'>
+				<img src='/static/Trellix-Logo-Black.svg' style='width:200px; display:inline-block; margin-bottom:16px;'>
+				<h3 style='margin:0 0 4px; font-size:20px; font-weight:bold; color:#1a1a1a;'>HXTool {{ version }}</h3>
+				<p style='margin:0; font-size:13px; color:#555;'>Extended user interface for Trellix Endpoint Security</p>
+			</div>
 
-			<div style='text-align: center;'><img src='/static/fireeye-2-color.png' style='width: 250px;'></div>
-			<h3 style='text-align: center; font-size: 24px; font-weight: bold;'>HXTool {{ version }}</h3>
-			<h3 style='text-align: center; font-size: 14px;'>Extended user interface for FireEye Endpoint Security</h3>
-			<br/>
+		<div style='padding: 24px;'>
 
 			<form id='login_form' method='post'>
 				{{ htInput.widget("username", elementTitle="Username", elementHint="Enter an apiuser or apiadmin username", elementId="ht_user", elementWidth="100%") }}
@@ -149,11 +470,12 @@
 				<br>
 
 				<h4 class='hxtool_typography_h4'>Controller profile</h4>
-				{{ htDropdown.widgetHeader("Select profile", "profile", "false", elementAdditionalClass="hxtool_dynamic-dropdown") }}
-				{{ htDropdown.widgetFooter() }}
-				<input type='hidden' name='controllerProfileDropdown' id='controllerProfileDropdown'>
-
-				<div style='margin-top: 12px; margin-bottom: 24px;'>
+				<div style='display:flex; align-items:center; gap:8px; margin-bottom:24px;'>
+					<div style='flex:1; min-width:0;'>
+						{{ htDropdown.widgetHeader("Select profile", "profile", "false", elementAdditionalClass="hxtool_dynamic-dropdown") }}
+						{{ htDropdown.widgetFooter() }}
+						<input type='hidden' name='controllerProfileDropdown' id='controllerProfileDropdown'>
+					</div>
 					<button type="button" id="profile_create" class="fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main"> new <i class="fe-icon--right fas fa-plus"></i></button>
 					<button type="button" id="profile_delete" class="fe-btn fe-btn--sm fe-btn--primary fe-btn--hxtool-main"> manage <i class="fe-icon--right fas fa-cogs"></i></button>
 				</div>
@@ -162,7 +484,7 @@
 					<button id="login_submit" style='width: 100%;' class="fe-btn fe-btn--lg fe-btn--primary fe-btn--hxtool-main-master"> login <i style='color: #11a962;' class="fe-icon--right fas fa-check"></i></button>
 				</div>
 
-				<h5 class='hxtool_typography_h5' style='text-align: center;'>Copyright &copy; 2022 by FireEye. All rights reserved</h5>
+				<h5 class='hxtool_typography_h5' style='text-align: center;'>Copyright &copy; 2026 by Trellix. All rights reserved</h5>
 
 			</form>
 
@@ -170,29 +492,14 @@
 
 	{{ htPanelNoHeader.widgetFooter() }}
 
-	{% if fail is not none %}
-	<div id="hxtoolMessage" style='z-index: 100; display: block;' class="fe-modal" role="dialog" aria-modal="true">
-		<div class="fe-modal__dialog fe-modal__dialog--medium">
-			<div class="fe-modal__content">
-				<div>
-					<div class="fe-modal__header">
-						<h4 class="fe-modal__title">Message</h4>
-						<button class="fe-modal-close" name="button" type="button">
-							<i class="fe-icon--center fas fa-times"></i>
-						</button>
-					</div>
-				</div>
-				<div class="fe-modal__body">
-					<div id="hxtoolMessageBody">
-						{{ fail }}
-					</div>
-				</div>
-				<div class="fe-modal__footer clearfix">
-					<button class="fe-btn fe-btn--md fe-btn--secondary" id="hxtoolMessageCancel" aria-label="Cancel"><span> Dismiss </span></button>
-				</div>
-			</div>
+	<div id="loginProgressOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
+		<div style="background:#1e2128; border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:36px 40px; min-width:300px; max-width:400px; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.7);">
+			<div id="loginProgressBody"></div>
 		</div>
 	</div>
+
+	{% if fail is not none %}
+	<script>$(document).ready(function() { showLoginError({{ fail | tojson }}); });</script>
 	{% endif %}
 
 
@@ -207,7 +514,7 @@
 
 	{{ htModal.widgetHeader("Manage profiles", modalId="profileRemove") }}
 	{{ htModal.widgetMiddle() }}
-		<button class="fe-btn fe-btn--md fe-btn--primary" id="profileRemoveDismiss" aria-label="Click"><span> Dismiss </span></button>
+		<button class="fe-btn fe-btn--md fe-btn--secondary" id="profileRemoveDismiss" aria-label="Close"><span> Close </span></button>
 	{{ htModal.widgetFooter() }}
 
   </div>

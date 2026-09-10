@@ -13,7 +13,7 @@
 	padding: 2px;
 	padding-top: 4px;
 	padding-bottom: 4px;
-    font-size: 11px;
+    font-size: 13px;
     border-right: 1px solid rgba(15, 184, 220, 0.4);;
     border-bottom: 1px solid rgba(15, 184, 220, 0.4);;
     vertical-align: bottom;
@@ -29,7 +29,7 @@
 	padding-top: 4px;
 	padding-bottom: 4px;
 	border-right: 1px solid rgba(15, 184, 220, 0.4);
-	font-size: 11px;
+	font-size: 13px;
 	vertical-align: middle;
 }
 
@@ -56,7 +56,7 @@
 }
 
 .hxtool_table a:link, a:visited {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: bold;
   color: rgba(255, 255, 255, 0.8);
 }
@@ -66,12 +66,12 @@
 }
 
 .streaming_ioc_id {
-   font-size: xx-small;
+   font-size: x-small;
    color: #006b8c	
 }
 
 .streaming_condition_id {
-   font-size: xx-small;
+   font-size: x-small;
    color: #0fb8dc	
 }
 

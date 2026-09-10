@@ -1,6 +1,6 @@
 .host-grid-container {
   display: grid;
-  grid-template-columns: 0.5fr 1fr 0.4fr;
+  grid-template-columns: 0.6fr 1fr 0.4fr;
   grid-template-rows: 160px;
   grid-template-areas: "top top top" "alerts content acquisitions";
   height: calc(100vh - 160px);
@@ -29,7 +29,7 @@
 	padding: 3px;
 	padding-left: 24px;
 	padding-right: 24px;
-	font-size: 10px;
+	font-size: 12px;
 	font-weight: bold;
 	border-top: 1px solid rgba(15, 184, 220, 0.4);
 }
@@ -128,7 +128,7 @@
 	margin-block-start: 6px;
 	margin-block-end: 0;
 	border-bottom: 1px solid rgba(15, 184, 220, 0.4);
-	font-size: 14px;
+	font-size: 16px;
 	padding-bottom: 3px;
 	padding-left: 2px;
 }

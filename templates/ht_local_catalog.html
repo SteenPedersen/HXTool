@@ -1,0 +1,534 @@
+{% extends "layout.html" %}
+{% block title %}HXTool - Local Rules Catalog{% endblock %}
+{% block navlocation %}Local Rules Catalog{% endblock %}
+{% block content %}
+
+<style>
+	#catalogTable tbody tr.lc-row-selected td { background-color: rgba(17, 169, 98, 0.12) !important; }
+	#catalogTable tbody tr td:not(:first-child):not(:last-child) { cursor: pointer; }
+</style>
+
+<script>
+
+	function generateLocalConditionList(conditions, containerId) {
+		var r = "<ul><li>or<ul>";
+		$.each(conditions, function(idx, tests) {
+			r += "<li>and<ul>";
+			$.each(tests, function(tidx, t) {
+				r += "<li>";
+				if (t['negate'] == true) {
+					r += "<span style='color: #ea475b; font-weight: bold;'>not </span>";
+				}
+				r += "<strong>" + $('<div>').text(t['token']).html() + "</strong> " + t['operator'] + " " + $('<div>').text(t['value']).html();
+				if (t['preservecase'] == true) {
+					r += "<span style='color: #59dc90;'> (case sensitive)</span>";
+				}
+				r += "</li>";
+			});
+			r += "</ul></li>";
+		});
+		r += "</ul></li></ul>";
+		$("#" + containerId).html(r);
+	}
+
+
+	function lcGetSelectedIds() {
+		var ids = [];
+		catalog_datatable.rows().eq(0).each(function(index) {
+			var row = catalog_datatable.row(index);
+			if ($("#" + row.data().local_catalog_id + "_check").is(":checked")) {
+				ids.push(row.data().local_catalog_id);
+			}
+		});
+		return ids;
+	}
+
+	function lcUpdateSelectAll() {
+		// catalog_datatable may not be assigned yet during first drawCallback
+		if (typeof catalog_datatable === 'undefined' || !catalog_datatable) return;
+		lcSyncSelectAll(catalog_datatable);
+	}
+
+	function lcSyncSelectAll(api) {
+		var total = 0, checked = 0;
+		api.rows().eq(0).each(function(index) {
+			var data = api.row(index).data();
+			if (!data) return;
+			total++;
+			if ($("#" + data.local_catalog_id + "_check").is(":checked")) checked++;
+		});
+		var hdrChk = document.getElementById("selectAllCheck");
+		if (!hdrChk) return;
+		if (checked === 0) {
+			hdrChk.indeterminate = false; hdrChk.checked = false;
+		} else if (checked === total) {
+			hdrChk.indeterminate = false; hdrChk.checked = true;
+		} else {
+			hdrChk.indeterminate = true;
+		}
+	}
+
+	$(document).ready(function() {
+
+		catalog_datatable = $('#catalogTable').DataTable({
+			"ajax": "/api/v1/datatable_local_catalog",
+			"paging":        false,
+			"ordering":      true,
+			"order":         [[2, "asc"], [1, "asc"]],
+			"info":          false,
+			"searching":     true,
+			"processing":    false,
+			"scrollY":       "calc(100vh - 240px)",
+			"scrollCollapse": true,
+			"scrollX":       true,
+			"dom": '<"hxtool_datatables_buttons"B>frtip',
+			"buttons": [
+				{ extend: "copy",  className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
+				{ extend: "csv",   className: "fe-btn", "text": "csv<i class='fe-icon--right fas fa-file'></i>" },
+				{ extend: "excel", className: "fe-btn", "text": "excel<i class='fe-icon--right fas fa-file-excel'></i>" }
+			],
+			"drawCallback": function() {
+			},
+			"columns": [
+				{ title: "",           "data": "local_catalog_id" },
+				{ title: "Name",       "data": "name" },
+				{ title: "Category",   "data": "category" },
+				{ title: "Platforms",  "data": "platforms" },
+				{ title: "Description","data": "description" },
+				{ title: "Presence",   "data": "presence_count" },
+				{ title: "Execution",  "data": "execution_count" },
+				{ title: "Action",     "data": "local_catalog_id" }
+			],
+			"columnDefs": [
+				{ "className": "hxtool_table_cell_center", "targets": [2, 3, 4, 5, 6, 7] },
+				{
+					"targets": 0,
+					"width": "34px",
+					render: function(data, type, row) {
+						return "&nbsp;<input id='" + row.local_catalog_id + "_check' type='checkbox' />";
+					}
+				},
+				{
+					"targets": 3,
+					render: function(data, type, row) {
+						return Array.isArray(data) ? data.join(", ") : (data || "");
+					}
+				},
+				{
+					"targets": 7,
+					"width": "280px",
+					render: function(data, type, row) {
+						return "<button style='margin-right:4px;' class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='view' data-id='" + row.local_catalog_id + "'>view<i class='fe-icon--right fas fa-eye'></i></button>"
+							 + "<button style='margin-right:4px;' class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='edit' data-id='" + row.local_catalog_id + "'>edit<i class='fe-icon--right fas fa-edit'></i></button>"
+							 + "<button class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main-remove' data-type='remove' data-id='" + row.local_catalog_id + "'>remove<i class='fe-icon--right fas fa-trash'></i></button>";
+					}
+				}
+			]
+		});
+		$('div.dataTables_filter input').addClass("fe-input");
+
+		// ── Row click toggles checkbox (skip checkbox cell and action cell) ──
+		$("#catalogTable").on("click", "tbody tr td:not(:first-child):not(:last-child)", function() {
+			var row = $(this).closest("tr");
+			var chk = row.find("td:first-child input[type='checkbox']");
+			chk.prop("checked", !chk.prop("checked"));
+			row.toggleClass("lc-row-selected", chk.prop("checked"));
+			lcUpdateSelectAll();
+		});
+
+		// Checkbox cell direct click
+		$("#catalogTable").on("change", "tbody input[type='checkbox']", function() {
+			$(this).closest("tr").toggleClass("lc-row-selected", this.checked);
+			lcUpdateSelectAll();
+		});
+
+
+		// ── Row action handler ──────────────────────────────────────────────
+		$("#catalogTable").on("click", ".catalogAction", function() {
+			var type = $(this).data("type");
+			var cid  = $(this).data("id");
+
+			if (type === "remove") {
+				var myrow = $(this).closest("tr");
+				$.ajax({
+					type: 'DELETE',
+					url: '/api/v1/local_catalog',
+					contentType: 'application/json',
+					data: JSON.stringify({ ids: [cid] }),
+					success: function() {
+						myrow.fadeOut(200, function() {
+							catalog_datatable.row(myrow).remove().draw();
+						});
+					},
+					error: hxtoolActionFail
+				});
+			}
+
+			if (type === "edit") {
+				location.href = "/local_catalog_edit/" + cid;
+			}
+
+			if (type === "view") {
+				var rowData = catalog_datatable.row($(this).closest("tr")).data();
+				var body = $("#ruleViewPopup").find(".fe-modal__body");
+				body.html("");
+
+				var meta = "<div style='margin-bottom:12px;'>";
+				meta += "<p style='font-weight:bold; font-size:15px; margin-bottom:4px;'>" + $("<div>").text(rowData.name).html() + "</p>";
+				if (rowData.description) {
+					meta += "<p style='color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:4px;'>" + $("<div>").text(rowData.description).html() + "</p>";
+				}
+				var plats = Array.isArray(rowData.platforms) ? rowData.platforms.join(", ") : (rowData.platforms || "");
+				meta += "<p style='color:rgba(255,255,255,0.45); font-size:11px;'>" + $("<div>").text(rowData.category).html() + " &bull; " + plats + "</p>";
+				meta += "</div>";
+				body.html(meta);
+
+				$.ajax({
+					type: 'GET',
+					url: '/api/v1/local_catalog/' + cid,
+					success: function(entry) {
+						if (entry && entry.presence && entry.presence.length > 0) {
+							body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting presence</h3><div id='lcPresenceList'></div>");
+							generateLocalConditionList(entry.presence, 'lcPresenceList');
+							body.append("<br>");
+						}
+						if (entry && entry.execution && entry.execution.length > 0) {
+							body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting execution</h3><div id='lcExecutionList'></div>");
+							generateLocalConditionList(entry.execution, 'lcExecutionList');
+						}
+						if ((!entry.presence || entry.presence.length === 0) && (!entry.execution || entry.execution.length === 0)) {
+							body.append("<p style='color:rgba(255,255,255,0.4); font-size:13px;'>No conditions stored.</p>");
+						}
+					},
+					error: function() {
+						body.append("<p style='color:#ea475b;'>Could not load rule conditions.</p>");
+					}
+				});
+
+				$("#ruleViewPopup").show();
+			}
+		});
+
+		$("#ruleViewDismiss").click(function() {
+			$("#ruleViewPopup").hide();
+		});
+
+
+		// ── Mirror from Controller ──────────────────────────────────────────
+		$("#mirrorButton").click(function() {
+			var btn = $(this);
+			btn.prop("disabled", true).html(" Mirroring… <i class='fe-icon--right fas fa-spinner fa-spin'></i>");
+			$.ajax({
+				type: 'POST',
+				url: '/api/v1/local_catalog/mirror',
+				contentType: 'application/json',
+				data: JSON.stringify({}),
+				success: function(res) {
+					catalog_datatable.ajax.reload();
+					var summary = {};
+					try { summary = JSON.parse(res['api_response']); } catch(e) {}
+					var html = "<p style='color:#4caf50; font-weight:bold;'>&#10003; Mirror complete.</p>"
+						+ "<p style='font-size:12px; color:rgba(255,255,255,0.7);'>Added: " + (summary.added || 0)
+						+ " &bull; Updated: " + (summary.updated || 0)
+						+ (summary.failed && summary.failed.length ? " &bull; <span style='color:#ea475b;'>Failed: " + summary.failed.length + "</span>" : "")
+						+ "</p>";
+					$("#hxtoolMessageBody").html(html);
+					$("#hxtoolMessage").show();
+				},
+				error: hxtoolActionFail,
+				complete: function() {
+					btn.prop("disabled", false).html(" Mirror from Controller <i class='fe-icon--right fas fa-sync'></i>");
+				}
+			});
+		});
+
+
+		// ── Upload Selected ─────────────────────────────────────────────────
+		$("#uploadButton").click(function() {
+			var ids = lcGetSelectedIds();
+			if (ids.length === 0) {
+				$("#hxtoolMessageBody").html("<p style='color:#ea475b; font-weight:bold;'>&#9888; No rules selected.</p>");
+				$("#hxtoolMessage").show();
+				return;
+			}
+			$.ajax({
+				type: 'POST',
+				url: '/api/v1/local_catalog/upload',
+				contentType: 'application/json',
+				data: JSON.stringify({ ids: ids }),
+				success: function(res) {
+					var summary = {};
+					try { summary = JSON.parse(res['api_response']); } catch(e) {}
+					var uploaded = summary.uploaded || [];
+					var failed   = summary.failed   || [];
+					var html = "";
+					if (uploaded.length > 0) {
+						html += "<p style='color:#4caf50; font-weight:bold; margin-bottom:4px;'>&#10003; Uploaded " + uploaded.length + " rule" + (uploaded.length === 1 ? "" : "s") + " to controller.</p>";
+					}
+					if (failed.length > 0) {
+						html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#10007; Failed: " + failed.length + "</p>";
+						html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+						failed.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+						html += "</ul>";
+					}
+					if (!html) { html = "<p style='color:rgba(255,255,255,0.5);'>Nothing was uploaded.</p>"; }
+					$("#hxtoolMessageBody").html(html);
+					$("#hxtoolMessage").show();
+				},
+				error: hxtoolActionFail
+			});
+		});
+
+
+		// ── Export Selected ─────────────────────────────────────────────────
+		$("#exportButton").click(function() {
+			var ids = lcGetSelectedIds();
+			if (ids.length === 0) {
+				$("#hxtoolMessageBody").html("<p style='color:#ea475b; font-weight:bold;'>&#9888; No rules selected.</p>");
+				$("#hxtoolMessage").show();
+				return;
+			}
+			$.ajax({
+				type: 'POST',
+				url: '/api/v1/local_catalog/export',
+				contentType: 'application/json',
+				xhrFields: { responseType: 'blob' },
+				processData: false,
+				data: JSON.stringify({ ids: ids }),
+				success: function(data, status, xhr) {
+					var filename = "local_catalog_export.rule";
+					var disposition = xhr.getResponseHeader('Content-Disposition');
+					if (disposition) {
+						var m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+						if (m && m[1]) filename = m[1].replace(/['"]/g, '');
+					}
+					var url = URL.createObjectURL(new File([data], {type: xhr.getResponseHeader('Content-Type')}));
+					var a = document.createElement('a');
+					a.href = url; a.target = '_blank'; a.download = filename;
+					a.click(); a.remove();
+					URL.revokeObjectURL(url);
+				},
+				error: hxtoolActionFail
+			});
+		});
+
+
+		// ── Delete Selected ─────────────────────────────────────────────────
+		$("#deleteButton").click(function() {
+			var ids = lcGetSelectedIds();
+			if (ids.length === 0) {
+				$("#hxtoolMessageBody").html("<p style='color:#ea475b; font-weight:bold;'>&#9888; No rules selected.</p>");
+				$("#hxtoolMessage").show();
+				return;
+			}
+			$.ajax({
+				type: 'DELETE',
+				url: '/api/v1/local_catalog',
+				contentType: 'application/json',
+				data: JSON.stringify({ ids: ids }),
+				success: function() {
+					catalog_datatable.ajax.reload();
+				},
+				error: hxtoolActionFail
+			});
+		});
+
+
+		// ── Import ──────────────────────────────────────────────────────────
+		$('#importButton').click(function() {
+			$('#catalogImportPopup').show();
+		});
+
+		$('#catalogImportCancel').click(function() {
+			$('#catalogImportPopup').hide();
+		});
+
+		$('#catalogImportSubmit').click(function() {
+			var files = $('#catalogImportFile').prop('files');
+			if (!files || files.length === 0) {
+				$("#hxtoolMessageBody").html("<p style='color:#ea475b; font-weight:bold;'>&#9888; No file selected.</p>"
+					+ "<p style='font-size:12px; color:rgba(255,255,255,0.6);'>Please choose one or more rule files before submitting.</p>");
+				$("#hxtoolMessage").show();
+				return;
+			}
+			$('#catalogImportPopup').hide();
+
+			var data = new FormData();
+			$.each(files, function(key, value) { data.append("ruleImport", value); });
+			data.append('platform', 'all');
+
+			hxtool_ajax_post_request("/api/v1/local_catalog/import", data, function(res) {
+				catalog_datatable.ajax.reload();
+				var summary = {};
+				try { summary = JSON.parse(res['api_response']); } catch(e) {}
+				var imported     = summary.imported      || [];
+				var failed       = summary.failed        || [];
+				var invalidFiles = summary.invalid_files || [];
+				var html = "";
+				if (imported.length > 0) {
+					html += "<p style='color:#4caf50; font-weight:bold; margin-bottom:4px;'>&#10003; Imported " + imported.length + " rule" + (imported.length === 1 ? "" : "s") + " into catalog.</p>";
+				}
+				if (failed.length > 0) {
+					html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#10007; Failed: " + failed.length + "</p>";
+					html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+					failed.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+					html += "</ul>";
+				}
+				if (invalidFiles.length > 0) {
+					html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#9888; " + invalidFiles.length + " invalid file(s).</p>";
+					html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+					invalidFiles.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+					html += "</ul>";
+				}
+				if (!html) { html = "<p style='color:rgba(255,255,255,0.5);'>No rules were imported.</p>"; }
+				$("#hxtoolMessageBody").html(html);
+				$("#hxtoolMessage").show();
+			});
+		});
+
+
+		// ── Hunt ────────────────────────────────────────────────────────────
+		var _huntSelectedRows = [];
+
+		$("#huntButton").click(function() {
+			_huntSelectedRows = [];
+			catalog_datatable.rows().eq(0).each(function(index) {
+				var d = catalog_datatable.row(index).data();
+				if (d && $("#" + d.local_catalog_id + "_check").is(":checked")) {
+					_huntSelectedRows.push({ id: d.local_catalog_id, name: d.name });
+				}
+			});
+			if (_huntSelectedRows.length === 0) {
+				$("#hxtoolMessageBody").html("<p style='color:#ea475b; font-weight:bold;'>&#9888; No rules selected.</p>");
+				$("#hxtoolMessage").show();
+				return;
+			}
+			var html = "";
+			if (_huntSelectedRows.length > 1) {
+				html += "<p style='margin-bottom:6px;'>" + _huntSelectedRows.length + " Enterprise Searches will be created:</p>";
+			}
+			html += _huntSelectedRows.map(function(r) {
+				return "<div><strong>HUNT_" + $("<div>").text(r.name).html() + "</strong></div>";
+			}).join("");
+			$("#huntNameList").html(html);
+
+			if ($("#huntHostsetList").children().length === 0) {
+				$.getJSON('/api/v1/hostsets/list', function(resp) {
+					var parsed, entries = [];
+					try { parsed = JSON.parse(resp.api_response); entries = parsed.data.entries; } catch(e) {}
+					var items = "";
+					$.each(entries, function(_, hs) {
+						items += "<li class='fe-dropdown__item'><a class='fe-dropdown__item-link'>"
+							+ "<span class='fe-dropdown__item-link-left-section'><i style='margin-top:2px;' class='fas fa-check fa-lg'></i></span>"
+							+ "<span class='fe-dropdown__item-link-text' data-id='" + hs._id + "'>" + $("<div>").text(hs.name).html() + "</span>"
+							+ "</a></li>";
+					});
+					$("#huntHostsetList").html(items);
+					$.each(entries, function(_, hs) {
+						if (hs._id === 9) {
+							$("#huntHostset")
+								.html($("<div>").text(hs.name).html() + " <i class='fe-icon--right fas fa-chevron-up'></i>")
+								.data("id", hs._id);
+						}
+					});
+				});
+			}
+			$("#huntPopup").show();
+		});
+
+		$("#huntCancel").click(function() { $("#huntPopup").hide(); });
+
+		$("#huntSubmit").click(function() {
+			var hostsetId = $("#huntHostset").data("id");
+			if (!hostsetId || hostsetId === "false") {
+				alert("Please select a host set.");
+				return;
+			}
+			var schedule = $("input[name='schedule']:checked").val() || "run_now";
+			var payload = {
+				ids: _huntSelectedRows.map(function(r) { return r.id; }),
+				sweephostset: String(hostsetId),
+				schedule: schedule
+			};
+			if (schedule === "run_at") {
+				payload.run_at_value = $("#run_at_value").val();
+			} else if (schedule === "run_interval") {
+				payload.interval_value = $("#interval_value").val();
+				payload.interval_unit  = $("#interval_unit").data("id");
+				payload.interval_start = $("input[name='interval_start']:checked").val();
+				payload.interval_start_value = $("#interval_start_value").val();
+			}
+			var btn = $(this);
+			btn.prop("disabled", true).html("<span> Submitting&hellip; </span>");
+			$.ajax({
+				type: "POST",
+				url: "/api/v1/enterprise_search/new/local_catalog",
+				contentType: "application/json",
+				data: JSON.stringify(payload),
+				success: function(resp) {
+					$("#huntPopup").hide();
+					var msg = "<p style='color:#4caf50; font-weight:bold;'>&#10003; " + resp.created + " Hunt search" + (resp.created !== 1 ? "es" : "") + " submitted.</p>"
+						+ "<p style='font-size:12px;'><a href='/search#enterprise'>View in Enterprise Search</a></p>";
+					if (resp.failed && resp.failed.length) {
+						msg += "<p style='color:#ea475b; font-size:12px;'>" + resp.failed.length + " rule(s) could not be submitted (no conditions).</p>";
+					}
+					$("#hxtoolMessageBody").html(msg);
+					$("#hxtoolMessage").show();
+				},
+				error: hxtoolActionFail,
+				complete: function() { btn.prop("disabled", false).html("<span> Hunt </span>"); }
+			});
+		});
+
+	});
+</script>
+
+{{ htPanelNoHeader.widgetHeader(panelDisplay="inline-block") }}
+	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="mirrorButton"> Mirror from Controller <i style='color: #11a962;' class="fe-icon--right fas fa-sync"></i></button>
+	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="uploadButton"> Upload selected <i style='color: #11a962;' class="fe-icon--right fas fa-upload"></i></button>
+	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="exportButton"> Export selected <i style='color: #11a962;' class="fe-icon--right fas fa-file-export"></i></button>
+	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="importButton"> Import <i style='color: #11a962;' class="fe-icon--right fas fa-file-import"></i></button>
+	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="deleteButton"> Delete selected <i style='color: #ea475b;' class="fe-icon--right fas fa-trash"></i></button>
+	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="huntButton" title="Enterprise Search"> Hunt <i style='color: #11a962;' class="fe-icon--right fas fa-crosshairs"></i></button>
+{{ htPanelNoHeader.widgetFooter() }}
+
+{{ htPanel.widgetHeader("Local Rules Catalog", panelId="catalogTableContainer", panelIcon="fa-table") }}
+	<table style='width: 100%;' id='catalogTable' class='hxtool_table'></table>
+{{ htPanel.widgetFooter() }}
+
+{{ htModal.widgetHeader("View rule", modalId="ruleViewPopup", modalSize="large") }}
+{{ htModal.widgetMiddle() }}
+	<button class="fe-btn fe-btn--md fe-btn--secondary" id="ruleViewDismiss" aria-label="Dismiss"><span> Dismiss </span></button>
+{{ htModal.widgetFooter() }}
+
+{{ htModal.widgetHeader("Import rule(s)", modalId="catalogImportPopup", modalSize="medium") }}
+	<h4 class='hxtool_typography_h3'>Rule file(s)</h4>
+	<input class="fe-btn fe-btn--sm fe-btn--primary active" style='background: transparent;' type='file' id='catalogImportFile' name='catalogImportFile' multiple>
+	<br />
+	<span class="fe-input-hint-text">HXTool rule (.rule / .zip) and OpenIOC 1.1 format only!</span>
+{{ htModal.widgetMiddle() }}
+	<button class="fe-btn fe-btn--md fe-btn--secondary" id="catalogImportCancel" aria-label="Cancel"><span> Cancel </span></button>
+	<button class="fe-btn fe-btn--md fe-btn--primary" id="catalogImportSubmit" aria-label="Submit"><span> Submit </span></button>
+{{ htModal.widgetFooter() }}
+
+{{ htModal.widgetHeader("Hunt — Enterprise Search", modalId="huntPopup", modalOverflow="true") }}
+	<h3 class='hxtool_typography_h3'>Searches to create</h3>
+	<div id="huntNameList" style="margin-bottom:12px; font-size:13px; color:rgba(255,255,255,0.7);"></div>
+	<h3 class='hxtool_typography_h3 hxtool_typography_underline'>Hostset</h3>
+	<div class='hxtool_panel_wrapper'>
+		<div class='fe-dropdown'>
+			<button type="button" id="huntHostset" data-id="false" class="fe-btn fe-btn--sm fe-btn--hxtool-main-dropdown"> select a hostset <i class="fe-icon--right fas fa-chevron-up"></i></button>
+			<div class="fe-dropdown__list-container">
+				<ul class="fe-dropdown__list fe-list" id="huntHostsetList"></ul>
+			</div>
+		</div>
+		<br>
+		<span class="fe-input-hint-text">Select the target host set</span><br>
+	</div>
+	{{ htSchedule.widgetHeader() }}
+{{ htModal.widgetMiddle() }}
+	<button class="fe-btn fe-btn--md fe-btn--secondary" id="huntCancel" aria-label="Cancel"><span> Cancel </span></button>
+	<button class="fe-btn fe-btn--md fe-btn--primary" id="huntSubmit" aria-label="Submit"><span> Hunt </span></button>
+{{ htModal.widgetFooter() }}
+
+{% endblock %}

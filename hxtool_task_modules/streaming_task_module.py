@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import socket
 import os
@@ -102,7 +101,7 @@ class streaming_task_module(task_module):
 					stream_socket.connect(sockaddr)
 					
 					for audit_object in self.yield_audit_results(bulk_download_path, batch_mode, host_name, agent_id, bulk_acquisition_id = bulk_acquisition_id):
-						stream_socket.sendall(json.dumps(audit_object, sort_keys = False).encode('utf-8') + '\n'.encode('utf-8'))
+						stream_socket.sendall(json.dumps(audit_object, sort_keys = False).encode('utf-8') + b'\n')
 					
 					stream_socket.close()
 								

@@ -1,11 +1,10 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # Global variables
 
 default_encoding = 'utf-8'
 HXTOOL_API_VERSION = 1
-__version__ = "4.8-pre"
+__version__ = "26.08-pre"
 hxtool_schema_version = 40
 data_path = "data"
 log_path = "log"

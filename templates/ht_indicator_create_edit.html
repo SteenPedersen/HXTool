@@ -3,6 +3,10 @@
 {% block navlocation %}Indicator{% endblock %}
 {% block content %}
 
+<style>
+	#ioctable { min-height: 0; }
+</style>
+
 	<script>
 
 		function guid() {
@@ -343,7 +347,7 @@
 
 				});
 
-				// Post a new indicator (new mode)				
+				// Post a new indicator (new mode)
 				if ($('#myTitle').data('id') == "new") {
 					if ($('#indicator_name').val() !== "") {
 						var myForm = new FormData();
@@ -353,6 +357,37 @@
 							location.href = "/indicators";
 						});
 
+					}
+					else {
+						$("#hxtoolMessageBody").html("Enter a rule name!");
+						$("#hxtoolMessage").show();
+					}
+				}
+				// Save to local catalog (catalog edit mode)
+				else if ($('#myTitle').data('id') == "catalog_edit") {
+					if ($('#indicator_name').val() !== "") {
+						var myForm = new FormData();
+						myForm.append("rule", JSON.stringify(data));
+						var catalogId = $('#myTitle').data('catalog-id');
+
+						hxtool_ajax_post_request("/api/v1/local_catalog/" + catalogId + "/save_form", myForm, function() {
+							location.href = "/local_catalog";
+						});
+					}
+					else {
+						$("#hxtoolMessageBody").html("Enter a rule name!");
+						$("#hxtoolMessage").show();
+					}
+				}
+				// Create new local catalog rule
+				else if ($('#myTitle').data('id') == "catalog_new") {
+					if ($('#indicator_name').val() !== "") {
+						var myForm = new FormData();
+						myForm.append("rule", JSON.stringify(data));
+
+						hxtool_ajax_post_request("/api/v1/local_catalog/new", myForm, function() {
+							location.href = "/local_catalog";
+						});
 					}
 					else {
 						$("#hxtoolMessageBody").html("Enter a rule name!");
@@ -380,7 +415,13 @@
 
 
 	{% if iocname %}
+		{% if local_catalog_id %}
+		<div id='myTitle' data-id='catalog_edit' data-catalog-id='{{local_catalog_id|safe}}' data-category='{{myioccategory|safe}}' data-iocname='{{iocname|safe}}' data-iocuri='{{myiocuri|safe}}' class='tableTitle'></div>
+		{% else %}
 		<div id='myTitle' data-id='edit' data-category='{{myioccategory|safe}}' data-iocname='{{iocname|safe}}' data-iocuri='{{myiocuri|safe}}' class='tableTitle'></div>
+		{% endif %}
+	{% elif catalog_mode %}
+		<div id='myTitle' data-id='catalog_new' class='tableTitle'></div>
 	{% else %}
 		<div id='myTitle' data-id='new' class='tableTitle'></div>
 	{% endif %}
@@ -403,8 +444,19 @@
 		{{ htDropdown.widgetItem("All", "all", elementIcon="fas fa-globe") }}
 		{{ htDropdown.widgetFooter() }}
 
-		{% if iocname %}
+		{% if iocname and not local_catalog_id %}
 			<div style='width: 650px; font-style: italic; font-size: 11px; margin-top: 10px;'>Note: Due to limitations in the HX API indicator conditions cannot be edited. When you use HXTool to edit an indicator a new indicator will be created and the old indicator will be removed. Make sure to backup your indicators before proceeding</div>
+		{% endif %}
+		{% if catalog_mode %}
+			<div style='width: 650px; margin-top: 10px; padding: 8px 12px; background: rgba(11,184,220,0.10); border-left: 3px solid #0fb8dc; font-size: 12px; color: rgba(255,255,255,0.75);'>
+				&#9432; This rule will be saved to the <strong>Local Catalog</strong> and will not be pushed to the HX controller unless you upload it later.
+			</div>
+		{% endif %}
+		{% if conditions_restricted %}
+			<div style='width: 650px; margin-top: 10px; padding: 8px 12px; background: rgba(234,71,91,0.12); border-left: 3px solid #ea475b; font-size: 12px; color: rgba(255,255,255,0.7);'>
+				&#9888; Rule conditions could not be loaded &mdash; your HX role does not have permission to read conditions for this indicator category (HX error code 1101).
+				The conditions table below will be empty. Submitting will overwrite existing conditions with an empty set.
+			</div>
 		{% endif %}
 		<div style='text-align: right;'>
 			<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="postbutton"> Submit <i style='color: #11a962;' class="fe-icon--right fas fa-check"></i></button>
@@ -412,6 +464,9 @@
 	{{ htPanel.widgetFooter() }}
 
 	{{ htPanel.widgetHeader("Rule", panelIcon="fa-table") }}
+		<div style='margin-bottom: 10px;'>
+			<button id='add_cond' class='fe-btn fe-btn--sm fe-btn--hxtool-main'>add condition<i class='fe-icon--right fas fa-plus'></i></button>
+		</div>
 		<table id='ioctable' class='hxtool_rtioc_table hxtool_table' style='width: 100%;'>
 			<thead>
 				<th>Group</th>
@@ -426,10 +481,6 @@
 			<tbody>
 			</tbody>
 		</table>
-
-		<div style='text-align: center; padding-top: 6px;'>
-			<button id='add_cond' class='fe-btn fe-btn--sm fe-btn--hxtool-main'>add condition<i class='fe-icon--right fas fa-plus'></i></button>
-		</div>
 	{{ htPanel.widgetFooter() }}
 
 

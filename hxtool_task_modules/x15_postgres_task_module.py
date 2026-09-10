@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import json
 try:
@@ -116,10 +115,10 @@ class x15_postgres_task_module(task_module):
 			import psycopg2
 		
 			if bulk_download_path:
-				x15_connection_string = "host={} port={} dbname={} user={}  password={}".format(x15_host, x15_port, x15_database, x15_user, x15_password)
+				x15_connection_string = f"host={x15_host} port={x15_port} dbname={x15_database} user={x15_user}  password={x15_password}"
 				x15_connection = psycopg2.connect(x15_connection_string)
 				x15_cursor = x15_connection.cursor()
-				x15_query = "COPY {} from stdin".format(x15_table)
+				x15_query = f"COPY {x15_table} from stdin"
 				
 				for audit_object in self.yield_audit_results(bulk_download_path, batch_mode, host_name, agent_id, bulk_acquisition_id = bulk_acquisition_id):
 					buffer = StringIO()

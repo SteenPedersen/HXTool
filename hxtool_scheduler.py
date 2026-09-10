@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import threading
 import datetime
@@ -79,7 +78,7 @@ class hxtool_scheduler:
 														cookies = hxtool_global.hxtool_config['cookies'], 
 														logger_name = hxtool_logging.getLoggerName(HXAPI.__name__), 
 														default_encoding = default_encoding)
-		api_login_task = hxtool_scheduler_task(profile_id, "Task API Login - {}".format(hx_host), immutable = True)
+		api_login_task = hxtool_scheduler_task(profile_id, f"Task API Login - {hx_host}", immutable = True)
 		api_login_task.add_step(task_api_session_module, kwargs = {
 									'profile_id' : profile_id,
 									'username' : username,
@@ -106,7 +105,11 @@ class hxtool_scheduler:
 		for profile in profiles:
 			task_api_credential = hxtool_global.hxtool_db.backgroundProcessorCredentialGet(profile['profile_id'])
 			if task_api_credential:
-				decrypted_background_password = keyring.get_password("hxtool_{}".format(profile['profile_id']), task_api_credential['hx_api_username'])
+				try:
+					decrypted_background_password = keyring.get_password(f"hxtool_{profile['profile_id']}", task_api_credential['hx_api_username'])
+				except keyring.errors.KeyringLocked:
+					logger.warning("Keychain access denied for {} ({}). Background session will not start — grant access and restart.".format(profile['hx_host'], profile['profile_id']))
+					continue
 				# TODO: eventually remove this code once most people are using keyring
 				if not decrypted_background_password:
 					logger.info("Background credential for {} is not using keyring, moving it.".format(profile['profile_id']))
@@ -115,9 +118,12 @@ class hxtool_scheduler:
 						iv = HXAPI.b64(task_api_credential['iv'], True)
 						key = crypt_pbkdf2_hmacsha256(salt, TASK_API_KEY)
 						decrypted_background_password = crypt_aes(key, iv, task_api_credential['hx_api_encrypted_password'], decrypt = True)
-						keyring.set_password("hxtool_{}".format(profile['profile_id']), task_api_credential['hx_api_username'], decrypted_background_password)
+						keyring.set_password(f"hxtool_{profile['profile_id']}", task_api_credential['hx_api_username'], decrypted_background_password)
 						hxtool_global.hxtool_db.backgroundProcessorCredentialRemove(profile['profile_id'])
 						hxtool_global.hxtool_db.backgroundProcessorCredentialCreate(profile['profile_id'], task_api_credential['hx_api_username'])
+					except keyring.errors.KeyringLocked:
+						logger.warning("Keychain access denied while migrating credential for {} ({}). Grant access and restart.".format(profile['hx_host'], profile['profile_id']))
+						continue
 					except (UnicodeDecodeError, ValueError, KeyError):
 						logger.error("Please reset the background credential for {} ({}).".format(profile['hx_host'], profile['profile_id']))
 				
@@ -128,7 +134,7 @@ class hxtool_scheduler:
 				logger.info("No background credential for {} ({}).".format(profile['hx_host'], profile['profile_id']))
 	
 	def add_task_api_session(self, profile_id, hx_host, hx_port, username, password):
-		keyring.set_password("hxtool_{}".format(profile_id), username, password)
+		keyring.set_password(f"hxtool_{profile_id}", username, password)
 		hxtool_global.hxtool_db.backgroundProcessorCredentialCreate(profile_id, username)
 		self._add_task_api_task(profile_id, hx_host, hx_port, username, password)
 		password = None
@@ -136,9 +142,9 @@ class hxtool_scheduler:
 	def remove_task_api_session(self, profile_id):
 		task_api_credential = hxtool_global.hxtool_db.backgroundProcessorCredentialGet(profile_id)
 		try:
-			keyring.delete_password("hxtool_{}".format(profile_id), task_api_credential['hx_api_username'])
+			keyring.delete_password(f"hxtool_{profile_id}", task_api_credential['hx_api_username'])
 		except keyring.errors.PasswordDeleteError as e:
-			logger.error("Failed to remove keyring credential for {}, error {}".format(profile_id, e))			
+			logger.error(f"Failed to remove keyring credential for {profile_id}, error {e}")			
 		out = hxtool_global.hxtool_db.backgroundProcessorCredentialRemove(profile_id)
 		hx_api_object = self.task_hx_api_sessions.get(profile_id)
 		if hx_api_object and hx_api_object.restIsSessionValid():
@@ -215,7 +221,7 @@ class hxtool_scheduler:
 				for task_entry in tasks:
 					p_id = task_entry.get('parent_id', None)
 					if p_id and (not task_entry['parent_complete'] and not hxtool_global.hxtool_db.taskGet(task_entry['profile_id'], p_id)):
-						logger.warn("Deleting orphan task {}, {}".format(task_entry['name'], task_entry['task_id']))
+						logger.warning("Deleting orphan task {}, {}".format(task_entry['name'], task_entry['task_id']))
 						hxtool_global.hxtool_db.taskDelete(task_entry['profile_id'], task_entry['task_id'])
 					else:
 						task = hxtool_scheduler_task.deserialize(task_entry)
@@ -223,9 +229,9 @@ class hxtool_scheduler:
 						# Set should_store to False as we've already been stored, and we skip a needless update
 						self.add(task, should_store = False)
 			else:
-				logger.warn("Task scheduler must be running before loading queued tasks from the database.")
+				logger.warning("Task scheduler must be running before loading queued tasks from the database.")
 		except Exception as e:
-			logger.error("Failed to load saved tasks from the database. Error: {}".format(pretty_exceptions(e)))
+			logger.error(f"Failed to load saved tasks from the database. Error: {pretty_exceptions(e)}")
 	
 	def status(self):
 		return self._poll_thread.is_alive()

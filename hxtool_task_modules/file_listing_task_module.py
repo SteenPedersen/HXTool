@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import os
 
@@ -64,10 +63,10 @@ class file_listing_task_module(task_module):
 					files = get_audit_records(audit_data, generator, 'FileItem', hostname=host_name)
 					if files:
 						hxtool_global.hxtool_db.fileListingAddResult(self.parent_task.profile_id, bulk_download_eid, files)
-						self.logger.debug("File Listing added to the database. bulk job: {0} host: {1}".format(bulk_download_eid, host_name))
+						self.logger.debug(f"File Listing added to the database. bulk job: {bulk_download_eid} host: {host_name}")
 						ret = True
 					else:
-						self.logger.warn("File Listing: No audit data for {} from bulk download job {}".format(host_name, bulk_download_eid))
+						self.logger.warning(f"File Listing: No audit data for {host_name} from bulk download job {bulk_download_eid}")
 					audit_data.close()
 					
 		except Exception as e:

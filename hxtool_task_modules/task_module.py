@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import hxtool_logging
 from hx_lib import *
 from hx_audit import *
 from hxtool_util import *
 
-class task_module(object):
+class task_module:
 	MAX_RETRY = 10
 	
 	# TODO: parent_task should probably be renamed to just task, as modules are associated with tasks
@@ -22,7 +21,7 @@ class task_module(object):
 		if s is not None and s.restIsSessionValid():
 			return s
 		else:
-			self.logger.error("There is no valid background task API session for profile {}".format(self.parent_task.profile_id))
+			self.logger.error(f"There is no valid background task API session for profile {self.parent_task.profile_id}")
 			return None
 		
 	def can_retry(self, err):

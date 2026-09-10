@@ -1,11 +1,10 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 try:
 	import psycopg2
 	import psycopg2.extras
 except ImportError:
-	print("HXTool with X15 integration requires the psycopg2 library please install it")
+	import sys; sys.stderr.write("HXTool with X15 integration requires the psycopg2 library please install it\n")
 	exit(1)
 
 import hxtool_global
@@ -13,7 +12,7 @@ import hxtool_global
 class hxtool_x15:
 	def __init__(self, x15conf = hxtool_global.hxtool_config['x15']):
 
-		connect_string = "host={} dbname={} user={} port={} password={}".format(x15conf['host'], x15conf['db'], x15conf['user'], x15conf['port'], x15conf['password'])
+		connect_string = f"host={x15conf['host']} dbname={x15conf['db']} user={x15conf['user']} port={x15conf['port']} password={x15conf['password']}"
 		self.conn = psycopg2.connect(connect_string)
 		self.cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 

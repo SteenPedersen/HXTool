@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import os
 
@@ -61,10 +60,10 @@ class stacking_task_module(task_module):
 						records = get_audit_records(audit_data, stack_model['audit_module'], stack_model['item_name'], fields=stack_model['fields'], post_process=stack_model['post_process'], hostname=host_name)
 						if records:
 							hxtool_global.hxtool_db.stackJobAddResult(self.parent_task.profile_id, bulk_download_eid, host_name, records)
-							self.logger.debug("Stacking records added to the database for host {}".format(host_name))
+							self.logger.debug(f"Stacking records added to the database for host {host_name}")
 							ret = True
 						else:
-							self.logger.warn("Stacking: No audit data for {}".format(host_name))
+							self.logger.warning(f"Stacking: No audit data for {host_name}")
 						
 						# Explicitly close
 						audit_data.close()
@@ -72,8 +71,8 @@ class stacking_task_module(task_module):
 				if ret and delete_bulk_download:
 					try:
 						os.remove(os.path.realpath(bulk_download_path))
-					except:
-						self.logger.warn("Failed to remove {}".format(os.path.realpath(bulk_download_path)))
+					except OSError:
+						self.logger.warning(f"Failed to remove {os.path.realpath(bulk_download_path)}")
 					
 			else:
 				self.logger.error("bulk_download_path is empty!")

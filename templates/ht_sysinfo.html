@@ -2,6 +2,34 @@
 {% block title %}HXTool - System information{% endblock %}
 {% block content %}
 
+<style>
+	.sysinfo-role-badge {
+		display: inline-block;
+		padding: 2px 10px;
+		margin: 2px 4px 2px 0;
+		border-radius: 3px;
+		font-size: 12px;
+		font-weight: bold;
+		background: rgba(255,255,255,0.1);
+		color: rgba(255,255,255,0.85);
+		border: 1px solid rgba(255,255,255,0.2);
+	}
+	.sysinfo-role-badge.privileged {
+		background: rgba(255,193,7,0.15);
+		border-color: #ffc107;
+		color: #ffc107;
+	}
+	.sysinfo-user-table td {
+		padding: 4px 16px 4px 0;
+		font-size: 13px;
+		vertical-align: top;
+	}
+	.sysinfo-user-table td:first-child {
+		color: rgba(255,255,255,0.5);
+		white-space: nowrap;
+	}
+</style>
+
 <script>
 	$(document).ready(function() {
 
@@ -28,12 +56,203 @@
 			$("#CacheStatContainer").append(hxtoolGenerateNestedTable(cacheStats));
 		});
 
+		// Load current HX user info and roles
+		hxtool_ajax_get_request("/api/v1/current_user/get", "", function(res) {
+			var payload = {};
+			try { payload = JSON.parse(res['api_response']); } catch(ex) {}
+
+			var perms = payload['permissions'] || {};
+			var username = payload['username'] || '';
+
+			// Determine effective HX API role from three probe results:
+			//   1. Read indicator conditions    → true for api_admin AND api_analyst; false otherwise
+			//   2. Agent config channels (GET)  → 200 only for api_admin; 403 for api_analyst
+			var canListHosts        = perms['List hosts']              && perms['List hosts']['ok'];
+			var canListIndicators   = perms['List indicators']         && perms['List indicators']['ok'];
+			var condProbe           = perms['Read indicator conditions'];
+			var condProbed          = (condProbe !== undefined && condProbe !== null);
+			var canReadConditions   = condProbed && condProbe['ok'];
+			var adminProbe          = perms['Administrator access'];
+			var adminProbed         = (adminProbe !== undefined && adminProbe !== null);
+			var canReadAdmins       = adminProbed && adminProbe['ok'];
+			var adminCode           = adminProbed ? (adminProbe['code'] || '?') : null;
+
+			// Role inference:
+			//  conditions OK + admins OK  → api_admin
+			//  conditions OK + admins 403 → api_analyst
+			//  conditions OK + admins 404 → api_admin or api_analyst (cloud HX, can't tell)
+			//  conditions FAIL            → neither api_admin nor api_analyst
+			var roleLabel = "";
+			var roleNote  = "";
+			var isFullAccess = false;
+			if (!condProbed) {
+				if (canListIndicators) roleLabel = "Undetermined — no indicators exist to probe conditions against";
+				else if (canListHosts) roleLabel = "Limited — host list access only";
+				else                   roleLabel = "Restricted — most API operations unavailable";
+			} else if (canReadConditions) {
+				isFullAccess = true;
+				if (canReadAdmins) {
+					roleLabel = "<span class='sysinfo-role-badge privileged'>API Admin</span>";
+					roleNote  = "Full administrative access — can read/write indicators, manage containment, and manage HX users.";
+				} else if (adminProbed && adminCode == 403) {
+					roleLabel = "<span class='sysinfo-role-badge privileged'>API Analyst</span>";
+					roleNote  = "Analyst access — can read indicator conditions, run searches and acquisitions, but cannot create or edit indicators, and cannot manage HX users or approve containment.";
+				} else {
+					// admins returned 404 — endpoint not exposed (cloud/Helix-hosted HX) or
+					// the HX version does not support it.  Conditions succeed so the account
+					// has at least API Analyst access; cannot distinguish from API Admin.
+					roleLabel = "<span class='sysinfo-role-badge privileged'>API Analyst</span> or <span class='sysinfo-role-badge privileged'>API Admin</span>";
+					roleNote  = "Indicator conditions are readable, confirming at least API Analyst access. "
+						+ "The agent config probe returned HTTP 404 — the endpoint may not be exposed on this HX version. "
+						+ "The exact role (API Admin vs API Analyst) cannot be determined from this controller.";
+				}
+			} else {
+				roleLabel = "No API role — access denied";
+				roleNote  = "This account cannot read indicator conditions. Viewing rule conditions, creating or editing rules, and viewing restricted alert content all require the API Admin or API Analyst role.";
+			}
+
+			var html = "<table class='sysinfo-user-table'>";
+			html += "<tr><td>Username</td><td>" + $('<div>').text(username).html() + "</td></tr>";
+			html += "<tr><td style='white-space:nowrap; vertical-align:middle;'>HX API role</td><td>" + roleLabel + "</td></tr>";
+			if (roleNote) {
+				html += "<tr><td></td><td style='font-size:12px; color:rgba(255,255,255,0.55); padding-top:2px;'>" + $('<div>').text(roleNote).html() + "</td></tr>";
+			}
+			html += "</table>";
+
+			// Comprehensive role capability matrix
+			// Each row: [label, admin, analyst, analyst_sr, auditor, investigator, monitor, operator, api_admin, api_analyst, fe_services]
+			var ROLES = ['admin','analyst','analyst_sr','auditor','investigator','monitor','operator','api_admin','api_analyst','fe_services'];
+			// Source: Trellix System Security Guide Release 2026.1
+			// Columns: admin, analyst, analyst_sr, auditor, investigator, monitor, operator, api_admin, api_analyst, fe_services
+			var CAP = [
+				["Web UI Access",                     1,1,1,1,1,1,1,0,0,0],
+				["API Access",                        0,0,0,0,0,0,0,1,1,1],
+				["CLI Access",                        1,1,1,1,1,1,1,0,0,1],
+				["FireEye as a Service (FaaS)",       0,0,0,0,0,0,0,0,0,1],
+				["Acquisitions (view)",               1,1,1,0,1,0,0,1,1,1],
+				["Agent Clone",                       1,0,0,0,0,0,0,0,0,0],
+				["Agent Clone (view)",                1,1,1,0,1,0,1,1,1,1],
+				["Agent Configurations",              1,0,0,0,0,0,1,1,0,0],
+				["Agent Diagnostics",                 1,0,0,0,0,0,0,0,0,1],
+				["Agent Diagnostics (view)",          1,0,0,0,0,0,0,0,0,1],
+				["Alerts",                            1,1,1,0,1,0,0,1,1,1],
+				["Approve Containment",               1,0,0,0,1,0,0,1,0,1],
+				["Audit Viewer",                      1,1,1,0,1,0,0,1,1,1],
+				["Authentication (AAA)",              1,0,0,0,0,0,0,0,0,1],
+				["Authentication (AAA) (view)",       1,0,0,0,0,1,1,0,0,0],
+				["Dashboard",                         1,1,1,0,1,0,0,0,0,0],
+				["Dashboard (view)",                  1,1,1,0,1,0,1,0,0,0],
+				["Data Acquisitions (Live Response)", 1,1,1,0,1,0,0,1,1,1],
+				["Enterprise Search",                 1,1,1,0,1,0,0,1,1,1],
+				["File Acquisitions",                 1,0,1,0,1,0,0,1,1,1],
+				["Health Check View",                 1,1,1,0,1,1,1,0,0,1],
+				["Hosts",                             1,1,1,0,1,0,0,1,1,1],
+				["Hosts (view)",                      1,1,1,0,1,0,1,1,1,1],
+				["Host Sets",                         1,0,0,0,0,0,1,0,0,0],
+				["Host Sets (view)",                  1,1,1,0,1,0,1,1,1,1],
+				["Indicator",                         1,1,1,0,1,0,0,1,1,1],
+				["Module Administration",             1,0,0,0,1,0,0,1,0,0],
+				["Module Data",                       1,1,1,1,1,1,1,1,1,1],
+				["Appliance Licenses",                1,0,0,0,0,0,1,0,0,1],
+				["Appliance Licenses (view)",         1,0,0,0,0,1,1,0,0,1],
+				["Logs",                              1,0,0,1,0,0,1,0,0,1],
+				["Manage Own Account",                1,1,1,1,1,1,1,0,0,0],
+				["Network",                           1,0,0,0,0,0,1,0,0,0],
+				["Network (View)",                    1,0,0,0,0,1,1,0,0,1],
+				["PKI",                               1,0,0,0,0,0,0,0,0,0],
+				["Stats",                             1,0,0,0,0,0,1,0,0,0],
+				["Stats (view)",                      1,0,0,0,0,1,1,0,0,1],
+				["Appliance Settings (general)",      1,0,0,0,0,0,1,0,0,0],
+				["Appliance Settings (view)",         1,0,0,0,0,1,1,0,0,1],
+				["Appliance Settings (sensitive)",    1,0,0,0,0,0,0,0,0,1],
+				["System Diagnostics",                1,0,0,0,0,0,1,0,0,0],
+			];
+
+			var userIsAdmin   = isFullAccess && canReadAdmins;
+			var userIsAnalyst = isFullAccess && !userIsAdmin;
+			// Detected column index: api_admin=7, api_analyst=8, unknown=-1
+			var userRoleIdx = userIsAdmin ? 7 : (userIsAnalyst ? 8 : -1);
+
+			html += "<h4 style='font-size:12px; color:rgba(255,255,255,0.5); margin:16px 0 4px; text-transform:uppercase; letter-spacing:0.05em;'>HX Role Capabilities</h4>";
+			html += "<p style='font-size:11px; color:rgba(255,255,255,0.35); margin:0 0 8px;'>"
+			     + "Source: <a href='https://docs.trellix.com/bundle/ssec_ag/page/UUID-694d71ae-8055-f310-604b-a1a069f5730e.html' target='_blank' style='color:#6cb8f0;'>Trellix Endpoint Security: appliance capabilities and roles</a>"
+			     + "</p>";
+			html += "<div style='overflow-x:auto; max-width:100%;'>";
+			html += "<table style='border-collapse:collapse; font-size:13px; white-space:nowrap;'>";
+			html += "<thead><tr style='background:rgba(255,255,255,0.06);'>";
+			html += "<th style='text-align:left; padding:6px 18px 6px 8px; color:rgba(255,255,255,0.45); font-weight:normal; border-bottom:2px solid rgba(255,255,255,0.12);'>Capability</th>";
+			for (var ci = 0; ci < ROLES.length; ci++) {
+				var isYouCol = (ci === userRoleIdx);
+				var roleColor = ci === 7 ? '#ffc107' : ci === 8 ? '#6cb8f0' : 'rgba(255,255,255,0.5)';
+				if (isYouCol) roleColor = '#4caf50';
+				var youMark = isYouCol ? ' <span style="font-size:9px;">&#9733;</span>' : '';
+				var thBg = isYouCol ? ' background:rgba(76,175,80,0.10);' : '';
+				html += "<th style='padding:6px 12px; text-align:center; color:" + roleColor + "; font-weight:bold; border-bottom:2px solid rgba(255,255,255,0.12);" + thBg + "'>"
+				     + ROLES[ci] + youMark + "</th>";
+			}
+			html += "</tr></thead><tbody>";
+			for (var ri = 0; ri < CAP.length; ri++) {
+				var row = CAP[ri];
+				var stripe = ri % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.12)';
+				html += "<tr>";
+				html += "<td style='padding:5px 18px 5px 8px; color:rgba(255,255,255,0.85); background:" + stripe + ";'>" + $('<div>').text(row[0]).html() + "</td>";
+				for (var ci2 = 0; ci2 < ROLES.length; ci2++) {
+					var isYou = (ci2 === userRoleIdx);
+					var cellBg = isYou
+						? 'rgba(76,175,80,' + (ri % 2 === 0 ? '0.13' : '0.09') + ')'
+						: stripe;
+					var icon = row[ci2 + 1]
+						? "<span style='color:#4caf50;'>&#10003;</span>"
+						: "<span style='color:rgba(255,255,255,0.15);'>&#10007;</span>";
+					html += "<td style='text-align:center; padding:5px 12px; background:" + cellBg + ";'>" + icon + "</td>";
+				}
+				html += "</tr>";
+			}
+			html += "</tbody></table></div>";
+
+			// Permission probe raw results
+			html += "<h4 style='font-size:12px; color:rgba(255,255,255,0.5); margin:16px 0 6px; text-transform:uppercase; letter-spacing:0.05em;'>API Permission Probe Results</h4>";
+			html += "<table class='sysinfo-user-table' style='width:auto;'>";
+			Object.keys(perms).forEach(function(label) {
+				var p   = perms[label];
+				var code = p.code || '?';
+				var icon, note;
+				// 'Administrator access' returning 404 means the endpoint is not exposed on
+				// this controller (cloud/Helix HX) — treat it as neutral, not a failure.
+				if (label === 'Administrator access' && code == 404) {
+					icon = "<span style='color:rgba(255,255,255,0.35);'>&#8212;</span>";
+					note = " <span style='color:rgba(255,255,255,0.35); font-size:11px;'>(not exposed on this controller)</span>";
+				} else {
+					icon = p.ok
+						? "<span style='color:#4caf50;'>&#10003;</span>"
+						: "<span style='color:#ea475b;'>&#10007;</span>";
+					note = "";
+				}
+				html += "<tr><td>" + $('<div>').text(label).html() + "</td>"
+					+ "<td style='padding-left:16px;'>" + icon + " HTTP " + code + note + "</td></tr>";
+			});
+			html += "</table>";
+
+			// Amber warning only when conditions probe definitively failed
+			if (condProbed && !canReadConditions) {
+				html += "<div style='margin-top:14px; padding:10px 14px; background:rgba(255,193,7,0.12); border-left:4px solid #ffc107; border-radius:3px;'>"
+					+ "<p style='margin:0 0 4px; font-size:12px; font-weight:bold; color:#ffc107; letter-spacing:0.03em;'>&#128274;&nbsp; Required HX User Permissions</p>"
+					+ "<p style='margin:0; font-size:12px; color:rgba(255,255,255,0.85);'>"
+					+ "This HX account cannot read indicator conditions, which means it lacks both the <strong>API Admin</strong> and <strong>API Analyst</strong> role. "
+					+ "Features that will not work: viewing rule conditions, creating or editing rules, and viewing restricted alert content. "
+					+ "Contact your HX administrator to assign the correct role in HX platform user management."
+					+ "</p></div>";
+			}
+
+			$("#hxUserContainer").html(html);
+		});
+
 	});
 
 </script>
 
 {{ htPanel.widgetHeader("System information", panelIcon="fa-info") }}
-	<h4 class='hxtool_typography_h3'>FireEye Endpoint Security Controller</h4>
+	<h4 class='hxtool_typography_h3'>Trellix Endpoint Security Controller</h4>
 	<div id='hxVersionContainer'></div>
 
 	<h4 class='hxtool_typography_h3'>HXTool</h4>
@@ -41,10 +260,24 @@
 
 {{ htPanel.widgetFooter() }}
 
+{{ htPanel.widgetHeader("HX User Account", panelIcon="fa-user") }}
+	<h4 class='hxtool_typography_h3'>Signed-in HX user and assigned roles</h4>
+	<div id='hxUserContainer'><p style='color:rgba(255,255,255,0.4); font-size:12px;'>Loading&hellip;</p></div>
+
+{{ htPanel.widgetFooter() }}
+
 {{ htPanel.widgetHeader("API Cache", panelIcon="fa-info") }}
 	<h4 class='hxtool_typography_h3'>Cache statistics</h4>
 	<div id='CacheStatContainer'></div>
 
+{{ htPanel.widgetFooter() }}
+
+{{ htPanel.widgetHeader("License", panelIcon="fa-id-card") }}
+	{% if license_text %}
+		<pre style='font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.65); white-space: pre-wrap; word-break: break-word; margin: 0; line-height: 1.6;'>{{ license_text }}</pre>
+	{% else %}
+		<p style='color:rgba(255,255,255,0.4); font-size:12px;'>License file not found.</p>
+	{% endif %}
 {{ htPanel.widgetFooter() }}
 
 {% endblock %}

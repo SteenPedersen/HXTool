@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import hxtool_global
 from .task_module import *
@@ -103,21 +102,21 @@ class bulk_acquisition_task_module(task_module):
 					(ret, response_code, response_data) = hx_api_object.restNewBulkAcq(script, hostset_id = hostset_id, comment = comment, skip_base64 = False)
 				if ret and '_id' in response_data['data']:
 					result['bulk_acquisition_id'] = response_data['data']['_id']
-					self.parent_task.name = "Bulk Acquisition ID: {}".format(response_data['data']['_id'])
+					self.parent_task.name = f"Bulk Acquisition ID: {response_data['data']['_id']}"
 					self.logger.info("Bulk acquisition ID {} submitted successfully.".format(response_data['data']['_id']))
 					if download and bulk_download_eid:
 						hxtool_global.hxtool_db.bulkDownloadUpdate(bulk_download_eid, bulk_acquisition_id = response_data['data']['_id'], hosts = {})
 						result['bulk_download_eid'] = bulk_download_eid
 				elif not ret:
 					if self.can_retry(response_data):
-						self.logger.warning("Bulk acquisition submission failed, will defer and retry up to {} times. Response code: {}, response data: {}".format(task_module.MAX_RETRY, response_code, response_data))
+						self.logger.warning(f"Bulk acquisition submission failed, will defer and retry up to {task_module.MAX_RETRY} times. Response code: {response_code}, response data: {response_data}")
 						self.retry_count +=1
 						self.parent_task.defer()
 						ret = True
 					else:
-						self.logger.error("Bulk acquisition submission failed and the retry count has been exceeded. Response code: {}, response data: {}".format(response_code, response_data))
+						self.logger.error(f"Bulk acquisition submission failed and the retry count has been exceeded. Response code: {response_code}, response data: {response_data}")
 			else:
-				self.logger.warn("No task API session for profile: {}".format(self.parent_task.profile_id))
+				self.logger.warning(f"No task API session for profile: {self.parent_task.profile_id}")
 		else:
 			self.logger.error("'script' is empty!")
 		return(ret, result)

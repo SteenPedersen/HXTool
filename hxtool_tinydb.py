@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from hxtool_db import hxtool_db
 
@@ -13,7 +12,8 @@ try:
 	from tinydb.storages import JSONStorage
 	from tinydb.middlewares import CachingMiddleware
 except ImportError:
-	print("hxtool_db requires the 'tinydb' module, please install it.")
+	import sys
+	sys.stderr.write("hxtool_db requires the 'tinydb' module, please install it.\n")
 	exit(1)
 
 import hxtool_vars
@@ -63,7 +63,7 @@ class hxtool_tinydb(hxtool_db):
 				logger.info("Database schema upgraded successfully.")
 				self._db.table('schema_version').insert({'schema_version' : hxtool_vars.hxtool_schema_version})
 		elif current_schema_version < hxtool_vars.hxtool_schema_version:
-			logger.warning("The current HXTool database has a schema version: {} that is older than the current version of: {}, a DB schema upgrade may be required.".format(current_schema_version, hxtool_vars.hxtool_schema_version))
+			logger.warning(f"The current HXTool database has a schema version: {current_schema_version} that is older than the current version of: {hxtool_vars.hxtool_schema_version}, a DB schema upgrade may be required.")
 			if self.upgrade_schema():
 				logger.info("Database schema upgraded successfully.")
 				self._db.table('schema_version').update({'schema_version' : hxtool_vars.hxtool_schema_version}, doc_ids = [1])
@@ -98,9 +98,8 @@ class hxtool_tinydb(hxtool_db):
 						self._db.table('bulk_download').update(tinydb.operations.delete('post_download_handler'), doc_ids = [r.doc_id])
 				
 			return True
-		except:
+		except Exception:
 			raise
-			return False
 			
 	
 	"""
@@ -119,7 +118,7 @@ class hxtool_tinydb(hxtool_db):
 		with self._lock:
 			try:
 				r = self._db.table('profile').insert({'profile_id' : profile_id, 'hx_name' : hx_name, 'hx_host' : hx_host, 'hx_port' : hx_port})
-			except:	
+			except Exception:
 				self._db.table('profile').remove(doc_ids = [r])
 				raise
 		return r
@@ -136,7 +135,7 @@ class hxtool_tinydb(hxtool_db):
 	"""
 	def profileGet(self, profile_id):
 		with self._lock:
-			return self._db.table('profile').get((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('profile').get(tinydb.Query()['profile_id'] == profile_id)
 			
 	def profileUpdate(self, profile_id, hx_name, hx_host, hx_port):
 		with self._lock:
@@ -149,33 +148,47 @@ class hxtool_tinydb(hxtool_db):
 	def profileDelete(self, profile_id):
 		self.backgroundProcessorCredentialRemove(profile_id)	
 		with self._lock:
-			return self._db.table('profile').remove((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('profile').remove(tinydb.Query()['profile_id'] == profile_id)
 		
 	def backgroundProcessorCredentialCreate(self, profile_id, hx_api_username):
 		r = None
 		with self._lock:
 			try:
 				r = self._db.table('background_processor_credential').insert({'profile_id' : profile_id, 'hx_api_username' : hx_api_username})
-			except:
+			except Exception:
 				self._db.table('background_processor_credential').remove(doc_ids = [r])
 				raise
 		return r
 		
 	def backgroundProcessorCredentialRemove(self, profile_id):
 		with self._lock:
-			return self._db.table('background_processor_credential').remove((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('background_processor_credential').remove(tinydb.Query()['profile_id'] == profile_id)
 			
 	def backgroundProcessorCredentialGet(self, profile_id):
 		with self._lock:
-			return self._db.table('background_processor_credential').get((tinydb.Query()['profile_id'] == profile_id))
-		
+			return self._db.table('background_processor_credential').get(tinydb.Query()['profile_id'] == profile_id)
+
+	def huntSettingsGet(self):
+		with self._lock:
+			result = self._db.table('hunt_settings').get(tinydb.Query()['key'] == 'config')
+			return result or {}
+
+	def huntSettingsSet(self, settings):
+		with self._lock:
+			table = self._db.table('hunt_settings')
+			existing = table.get(tinydb.Query()['key'] == 'config')
+			if existing:
+				table.update(settings, tinydb.Query()['key'] == 'config')
+			else:
+				table.insert({'key': 'config', **settings})
+
 	def alertCreate(self, profile_id, hx_alert_id):
 		r = self.alertGet(profile_id, hx_alert_id)
 		if not r:
 			with self._lock:
 				try:
 					r = self._db.table('alert').insert({'profile_id' : profile_id, 'hx_alert_id' : int(hx_alert_id), 'annotations' : []})
-				except:
+				except Exception:
 					self._db.table('alert').remove(doc_ids = [r])
 					raise
 		else:
@@ -184,7 +197,7 @@ class hxtool_tinydb(hxtool_db):
 
 	def alertList(self, profile_id):
 		with self._lock:
-			return self._db.table('alert').search((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('alert').search(tinydb.Query()['profile_id'] == profile_id)
 
 	def alertGet(self, profile_id, hx_alert_id):
 		with self._lock:
@@ -208,7 +221,7 @@ class hxtool_tinydb(hxtool_db):
 															'complete' : False,
 															'create_timestamp' : ts, 
 															'update_timestamp' : ts})
-			except:
+			except Exception:
 				self._db.table('bulk_download').remove(doc_ids = [r])
 				raise
 		return r		
@@ -223,7 +236,7 @@ class hxtool_tinydb(hxtool_db):
 	
 	def bulkDownloadList(self, profile_id):
 		with self._lock:
-			return self._db.table('bulk_download').search((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('bulk_download').search(tinydb.Query()['profile_id'] == profile_id)
 	
 	def bulkDownloadUpdate(self, bulk_download_eid, bulk_acquisition_id = None, hosts = None, stopped = None, complete = None):
 		d = {'update_timestamp' : HXAPI.dt_to_str(datetime.datetime.utcnow())}
@@ -279,7 +292,7 @@ class hxtool_tinydb(hxtool_db):
 														'create_timestamp' : ts, 
 														'update_timestamp' : ts
 														})
-			except:
+			except Exception:
 				self._db.table('file_listing').remove(doc_ids = [r])
 				raise
 		return r
@@ -325,7 +338,7 @@ class hxtool_tinydb(hxtool_db):
 					'update_timestamp' : ts,
 					'file_listing_id': file_listing_id
 				})
-			except:
+			except Exception:
 				#TODO: Not sure if the value returns that we'd ever see an exception
 				if r:
 					self._db.table('multi_file').remove(doc_ids = [r])
@@ -336,7 +349,7 @@ class hxtool_tinydb(hxtool_db):
 		try:
 			with self._lock:
 				return self._db.table('multi_file').update(self._db_append_to_list('files', job), doc_ids=[int(multi_file_id)])
-		except:
+		except Exception:
 			return None
 
 	def multiFileList(self, profile_id):
@@ -376,7 +389,7 @@ class hxtool_tinydb(hxtool_db):
 														'create_timestamp' : ts, 
 														'update_timestamp' : ts
 														})
-			except:
+			except Exception:
 				self._db.table('stacking').remove(doc_ids = [r])
 				raise
 		return r
@@ -391,7 +404,7 @@ class hxtool_tinydb(hxtool_db):
 	
 	def stackJobList(self, profile_id):
 		with self._lock:
-			return self._db.table('stacking').search((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('stacking').search(tinydb.Query()['profile_id'] == profile_id)
 	
 	def stackJobAddHost(self, profile_id, bulk_download_eid, hostname, agent_id):
 		with self._lock:
@@ -430,7 +443,7 @@ class hxtool_tinydb(hxtool_db):
 	
 	def sessionGet(self, session_id):
 		with self._lock:
-			return self._db.table('session').get((tinydb.Query()['session_id'] == session_id))
+			return self._db.table('session').get(tinydb.Query()['session_id'] == session_id)
 		
 	def sessionUpdate(self, session_id, session_data):
 		with self._lock:
@@ -438,7 +451,7 @@ class hxtool_tinydb(hxtool_db):
 		
 	def sessionDelete(self, session_id):
 		with self._lock:
-			return self._db.table('session').remove((tinydb.Query()['session_id'] == session_id))
+			return self._db.table('session').remove(tinydb.Query()['session_id'] == session_id)
 	
 	def scriptCreate(self, scriptname, script, username):
 		with self._lock:
@@ -455,11 +468,11 @@ class hxtool_tinydb(hxtool_db):
 
 	def scriptDelete(self, script_id):
 		with self._lock:
-			return self._db.table('scripts').remove((tinydb.Query()['script_id'] == script_id))
+			return self._db.table('scripts').remove(tinydb.Query()['script_id'] == script_id)
 
 	def scriptGet(self, script_id):
 		with self._lock:
-			return self._db.table('scripts').get((tinydb.Query()['script_id'] == script_id))
+			return self._db.table('scripts').get(tinydb.Query()['script_id'] == script_id)
 
 
 	def oiocCreate(self, iocname, ioc, username):
@@ -477,11 +490,54 @@ class hxtool_tinydb(hxtool_db):
 
 	def oiocDelete(self, ioc_id):
 		with self._lock:
-			return self._db.table('openioc').remove((tinydb.Query()['ioc_id'] == ioc_id))
+			return self._db.table('openioc').remove(tinydb.Query()['ioc_id'] == ioc_id)
 
 	def oiocGet(self, ioc_id):
 		with self._lock:
-			return self._db.table('openioc').get((tinydb.Query()['ioc_id'] == ioc_id))
+			return self._db.table('openioc').get(tinydb.Query()['ioc_id'] == ioc_id)
+
+	def localCatalogCreate(self, name, uri_name, category, platforms, description, create_text, presence, execution):
+		with self._lock:
+			return self._db.table('local_catalog').insert({
+				'local_catalog_id': str(secure_uuid4()),
+				'name': name,
+				'uri_name': uri_name,
+				'category': category,
+				'platforms': platforms or [],
+				'description': description or '',
+				'create_text': create_text or '',
+				'presence': presence or [],
+				'execution': execution or [],
+				'create_timestamp': HXAPI.dt_to_str(datetime.datetime.utcnow()),
+				'update_timestamp': HXAPI.dt_to_str(datetime.datetime.utcnow())
+			})
+
+	def localCatalogList(self):
+		with self._lock:
+			return self._db.table('local_catalog').all()
+
+	def localCatalogGet(self, local_catalog_id):
+		with self._lock:
+			return self._db.table('local_catalog').get(tinydb.Query()['local_catalog_id'] == local_catalog_id)
+
+	def localCatalogGetByUriName(self, uri_name):
+		with self._lock:
+			return self._db.table('local_catalog').get(tinydb.Query()['uri_name'] == uri_name)
+
+	def localCatalogUpdate(self, local_catalog_id, name, uri_name, category, platforms, description, create_text, presence, execution):
+		with self._lock:
+			return self._db.table('local_catalog').update(
+				{'name': name, 'uri_name': uri_name, 'category': category,
+				 'platforms': platforms or [], 'description': description or '',
+				 'create_text': create_text or '', 'presence': presence or [],
+				 'execution': execution or [],
+				 'update_timestamp': HXAPI.dt_to_str(datetime.datetime.utcnow())},
+				tinydb.Query()['local_catalog_id'] == local_catalog_id
+			)
+
+	def localCatalogDelete(self, local_catalog_id):
+		with self._lock:
+			return self._db.table('local_catalog').remove(tinydb.Query()['local_catalog_id'] == local_catalog_id)
 
 	def taskCreate(self, serialized_task):
 		with self._lock:
@@ -518,12 +574,22 @@ class hxtool_tinydb(hxtool_db):
 			
 	def taskProfileGet(self, taskprofile_id):
 		with self._lock:
-			return self._db.table('taskprofiles').get((tinydb.Query()['taskprofile_id'] == taskprofile_id))
+			return self._db.table('taskprofiles').get(tinydb.Query()['taskprofile_id'] == taskprofile_id)
 
 	def taskProfileDelete(self, taskprofile_id):
 		with self._lock:
-			return self._db.table('taskprofiles').remove((tinydb.Query()['taskprofile_id'] == taskprofile_id))
+			return self._db.table('taskprofiles').remove(tinydb.Query()['taskprofile_id'] == taskprofile_id)
 
+	def huntQueryCreate(self, displayname, query):
+		with self._lock:
+			return self._db.table('hunt_queries').upsert(
+				{'displayname': displayname, 'query': query},
+				tinydb.Query()['displayname'] == displayname
+			)
+
+	def huntQueryGet(self, displayname):
+		with self._lock:
+			return self._db.table('hunt_queries').get(tinydb.Query()['displayname'] == displayname)
 
 	def auditCreate(self, profile_id, host_id, hostname, generator, start_time, end_time, results):
 		with self._lock:
@@ -538,7 +604,7 @@ class hxtool_tinydb(hxtool_db):
 	
 	def auditList(self, profile_id):
 		with self._lock:
-			return self._db.table('audits').get((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('audits').get(tinydb.Query()['profile_id'] == profile_id)
 	
 	def auditGet(self, profile_id, audit_id):
 		with self._lock:
@@ -551,11 +617,11 @@ class hxtool_tinydb(hxtool_db):
 
 	def ruleList(self, profile_id):
 		with self._lock:
-			return self._db.table('rules').search((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('rules').search(tinydb.Query()['profile_id'] == profile_id)
 
 	def ruleGet(self, rule_id):
 		with self._lock:
-			r = self._db.table('rules').get((tinydb.Query()['id'] == rule_id))
+			r = self._db.table('rules').get(tinydb.Query()['id'] == rule_id)
 			if r:
 				return HXAPI.b64(r['rule'], decode = True, decode_string = True)
 			else:
@@ -571,7 +637,7 @@ class hxtool_tinydb(hxtool_db):
 
 	def ruleAddLog(self, rule_id, message):
 		with self._lock:
-			r = self._db.table('rules').get((tinydb.Query()['id'] == rule_id))
+			r = self._db.table('rules').get(tinydb.Query()['id'] == rule_id)
 			if 'log' in r.keys():
 				log = r['log']
 				log.append({ "c_timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message": message })
@@ -585,7 +651,7 @@ class hxtool_tinydb(hxtool_db):
 
 	def ruleRemove(self, rule_id):
 		with self._lock:
-			return self._db.table('rules').remove((tinydb.Query()['id'] == rule_id))
+			return self._db.table('rules').remove(tinydb.Query()['id'] == rule_id)
 
 	def ruleAdd(self, profile_id, name, category, platform, create_user, rule, method):
 		with self._lock:
@@ -635,12 +701,12 @@ class hxtool_tinydb(hxtool_db):
 
 	def cacheDrop(self, profile_id):
 		with self._lock:
-			return self._db.table("ObjectCache").remove((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table("ObjectCache").remove(tinydb.Query()['profile_id'] == profile_id)
 
 
 	def cacheListAll(self, profile_id):
 		with self._lock:
-			return self._db.table('ObjectCache').search((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('ObjectCache').search(tinydb.Query()['profile_id'] == profile_id)
 
 	def cacheList(self, profile_id, cacheType):
 		with self._lock:
@@ -706,15 +772,15 @@ class hxtool_tinydb(hxtool_db):
 
 	def hostGroupList(self, profile_id):
 		with self._lock:
-			return self._db.table('hostgroups').search((tinydb.Query()['profile_id'] == profile_id))
+			return self._db.table('hostgroups').search(tinydb.Query()['profile_id'] == profile_id)
 			
 	def hostGroupGet(self, hostgroup_id):
 		with self._lock:
-			return self._db.table('hostgroups').get((tinydb.Query()['hostgroup_id'] == hostgroup_id))
+			return self._db.table('hostgroups').get(tinydb.Query()['hostgroup_id'] == hostgroup_id)
 
 	def hostGroupDelete(self, hostgroup_id):
 		with self._lock:
-			return self._db.table('hostgroups').remove((tinydb.Query()['hostgroup_id'] == hostgroup_id))
+			return self._db.table('hostgroups').remove(tinydb.Query()['hostgroup_id'] == hostgroup_id)
 			
 	
 	def _db_update_nested_dict(self, dict_name, dict_key, dict_values, update_timestamp = True):

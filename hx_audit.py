@@ -11,7 +11,7 @@ def get_audit_records(audit_data, generator, item_name, fields=None, post_proces
 	items = []
 	mime_type = get_mime_type(generator)
 	if mime_type == 'application/xml':
-		xml_items = ET.parse(audit_data).findall('./{0}'.format(item_name))
+		xml_items = ET.parse(audit_data).findall(f'./{item_name}')
 		for xml_item in xml_items:
 			item = dict(static_values)
 			for e in xml_item:
@@ -133,7 +133,7 @@ class AuditPackage:
 							d['generator_item_name'] = payload_item_tag
 							
 							if payload_item_tag is None:
-								raise EmptyAuditException("The audit payload '{}' for generator '{}' is empty. Please manually inspect the audit package: {}".format(result['payload'], audit['generator'], self.package.filename)) 
+								raise EmptyAuditException(f"The audit payload '{result['payload']}' for generator '{audit['generator']}' is empty. Please manually inspect the audit package: {self.package.filename}") 
 						
 							
 							for event, elem in xml_iterator:
@@ -168,8 +168,8 @@ class AuditPackage:
 								break
 								
 						if audit_item is None:
-							raise EmptyAuditException("The audit payload '{}' for generator '{}' is empty. Please manually inspect the audit package: {}".format(result['payload'], audit['generator'], self.package.filename)) 
-						
+							raise EmptyAuditException(f"The audit payload '{result['payload']}' for generator '{audit['generator']}' is empty. Please manually inspect the audit package: {self.package.filename}")
+
 						if batch_mode:
 							result_dict = {
 								'results' : [{audit_item : _} for _ in audit_json[audit_item]]

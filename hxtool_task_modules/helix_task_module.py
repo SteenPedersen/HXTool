@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import socket
 import os
@@ -79,7 +78,7 @@ class helix_task_module(task_module):
 	def _write_fh(self, gz_fh, bulk_download_path, batch_mode, host_name, agent_id, bulk_acquisition_id=None):
 		gz = gzip.GzipFile(fileobj=gz_fh, mode='wb')
 		for audit_object in self.yield_audit_results(bulk_download_path, batch_mode, host_name, agent_id, bulk_acquisition_id = bulk_acquisition_id):
-			gz.write(json.dumps(audit_object, sort_keys = False).encode('utf-8') + '\n'.encode('utf-8'))
+			gz.write(json.dumps(audit_object, sort_keys = False).encode('utf-8') + b'\n')
 		gz.close()
 		gz_fh.seek(0)
 	
@@ -91,7 +90,7 @@ class helix_task_module(task_module):
 				
 			resp = requests.post(url, headers={"x-api-key": apikey}, data={"host_name": host_name, "agent_id": agent_id, "bulk_acquisition_id": bulk_acquisition_id})
 			if not resp:
-				raise Exception("Unable to get upload link from URL {}: {}".format(url, resp))
+				raise Exception(f"Unable to get upload link from URL {url}: {resp}")
 			resp = resp.json()
 			self.logger.debug("Uploading id {} from {} to {}".format(bulk_acquisition_id, bulk_download_path, resp["url"]))
 
@@ -100,8 +99,8 @@ class helix_task_module(task_module):
 				self._write_fh(gz_fh, bulk_download_path, batch_mode, host_name, agent_id, bulk_acquisition_id = bulk_acquisition_id)
 				resp = requests.post(resp["url"], data=resp["fields"], files={"file": (str(time.time()), gz_fh)})
 				if not resp:
-					raise Exception("Unable to upload: {} {}".format(resp, resp.text))
-				self.logger.info("Uploaded id {} in {}".format(bulk_acquisition_id, (time.time() - start)))
+					raise Exception(f"Unable to upload: {resp} {resp.text}")
+				self.logger.info(f"Uploaded id {bulk_acquisition_id} in {(time.time() - start)}")
 				if delete_bulk_download:
 					os.remove(os.path.realpath(bulk_download_path))			
 				return(True, None)

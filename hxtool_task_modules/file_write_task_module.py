@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import os
 import json
@@ -76,7 +75,7 @@ class file_write_task_module(task_module):
 		try:
 			if bulk_download_path:
 				# TODO: Ultimately, this should be converted to utilizing the Python rotating log handler.  
-				with TemporaryFileLock(os.path.dirname(file_name), file_name = "{}.lock".format(os.path.basename(file_name))):
+				with TemporaryFileLock(os.path.dirname(file_name), file_name = f"{os.path.basename(file_name)}.lock"):
 					with open(file_name, 'a') as f:
 						for audit_object in self.yield_audit_results(bulk_download_path, batch_mode, host_name, agent_id, bulk_acquisition_id = bulk_acquisition_id):
 							json.dump(audit_object, f, sort_keys = False)

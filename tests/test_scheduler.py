@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import sys
 import random
@@ -25,7 +24,7 @@ class test_scheduler:
 		print("Testing hxtool_scheduler...")
 		self.ht_scheduler.start()
 		for i in range(1, 500):
-			ht_task = hxtool_scheduler_task('System', 'Test Task {}'.format(i), immutable = True, logger = self.ht_scheduler.logger)
+			ht_task = hxtool_scheduler_task('System', f'Test Task {i}', immutable = True, logger = self.ht_scheduler.logger)
 			r = random.randint(1, 100)
 			if r > 50:
 				ht_task.set_schedule(minutes = random.randint(1, 5))
@@ -40,7 +39,7 @@ class test_scheduler:
 			self.ht_scheduler.stop()
 			
 	def test_scheduler_function(self, n):
-		print("Random number is: {}".format(n * random.randint(0, 500)))
+		print(f"Random number is: {n * random.randint(0, 500)}")
 		return True
 		
 t = test_scheduler()

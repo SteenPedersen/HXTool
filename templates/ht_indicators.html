@@ -1,9 +1,158 @@
 {% extends "layout.html" %}
-{% block title %}HXTool - Indicators{% endblock %}
+{% block title %}HXTool - Rules{% endblock %}
 {% block navlocation %}Manage Indicators{% endblock %}
 {% block content %}
 
+<style>
+	/* ── Tabs ─────────────────────────────────────────────────────────── */
+	.ht-tab-bar {
+		display: flex;
+		gap: 3px;
+		background: rgba(0,0,0,0.25);
+		border-radius: 6px 6px 0 0;
+		padding: 8px 8px 0;
+		border-bottom: 3px solid rgba(17,169,98,0.3);
+		margin-bottom: 0;
+	}
+	.ht-tab {
+		padding: 11px 32px;
+		border: 1px solid transparent;
+		background: transparent;
+		color: rgba(255,255,255,0.38);
+		cursor: pointer;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		border-radius: 4px 4px 0 0;
+		border-bottom: 3px solid transparent;
+		margin-bottom: -3px;
+		transition: color 0.15s, background 0.15s, border-color 0.15s;
+	}
+	.ht-tab:hover {
+		color: rgba(255,255,255,0.8);
+		background: rgba(255,255,255,0.07);
+		border-color: rgba(255,255,255,0.12);
+		border-bottom-color: transparent;
+	}
+	.ht-tab.active {
+		color: #11a962;
+		background: rgba(17,169,98,0.12);
+		border-color: rgba(17,169,98,0.3);
+		border-bottom-color: #11a962;
+	}
+
+	/* ── Toolbar row ──────────────────────────────────────────────────── */
+	.ht-toolbar-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.ht-toolbar-left  { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+	.ht-toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+	.ht-toolbar-right .dt-buttons { display: flex; gap: 4px; }
+
+	/* ── DataTable filter/buttons — reset absolute positioning ────────── */
+	.ioc-dt-filter .dataTables_filter,
+	.cat-dt-filter .dataTables_filter { position: static !important; margin: 0 !important; }
+	.ioc-dt-filter .dataTables_filter input,
+	.cat-dt-filter .dataTables_filter input { width: 360px !important; }
+	.ioc-dt-btns, .cat-dt-btns { position: static !important; margin: 0 !important; }
+
+	/* ── Row selection highlights ─────────────────────────────────────── */
+	#iocTable tbody tr.ioc-row-selected td { background-color: rgba(17, 169, 98, 0.12) !important; }
+	#catalogTable tbody tr.lc-row-selected td { background-color: rgba(17, 169, 98, 0.12) !important; }
+	#catalogTable tbody tr td:not(:first-child):not(:last-child) { cursor: pointer; }
+
+	/* ── Full-viewport flex layout ───────────────────────────────────── */
+	/* Each tab panel fills (100vh − nav − content-pad − tab-bar).
+	   --ht-panel-h is set precisely by JS once the tab bar is measured;
+	   the fallback keeps the page usable even before JS runs.          */
+	#panel-server,
+	#panel-catalog {
+		height: var(--ht-panel-h, calc(100vh - 126px));
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	/* Toolbar panel is fixed height */
+	#panel-server > .fe-panel,
+	#panel-catalog > .fe-panel { flex-shrink: 0; }
+	/* Gap+table wrapper grows to fill remaining space */
+	#panel-server > div:not(.fe-panel),
+	#panel-catalog > div:not(.fe-panel) {
+		flex: 1; min-height: 0;
+		display: flex; flex-direction: column;
+	}
+	/* Table panel (fe-panel) and its body grow too */
+	#iocTableContainer, #catalogTableContainer {
+		flex: 1; min-height: 0;
+		display: flex; flex-direction: column;
+	}
+	#iocTableContainer > .fe-panel__body,
+	#catalogTableContainer > .fe-panel__body {
+		flex: 1; min-height: 0;
+		display: flex; flex-direction: column;
+		padding-bottom: 8px;
+	}
+	/* DataTables wrapper and scroll container grow */
+	#iocTable_wrapper, #catalogTable_wrapper {
+		flex: 1; min-height: 0;
+		display: flex; flex-direction: column;
+	}
+	#iocTable_wrapper .dataTables_scroll,
+	#catalogTable_wrapper .dataTables_scroll {
+		flex: 1; min-height: 0;
+		display: flex; flex-direction: column;
+	}
+	/* Fixed header stays its natural height */
+	#iocTable_wrapper .dataTables_scrollHead,
+	#catalogTable_wrapper .dataTables_scrollHead { flex-shrink: 0; }
+	/* JS (setScrollBodyH) sets an explicit pixel height so overflow-y triggers a scrollbar.
+	   overflow-y: auto !important beats any DataTables inline override. */
+	#iocTable_wrapper .dataTables_scrollBody,
+	#catalogTable_wrapper .dataTables_scrollBody {
+		overflow-y: auto !important;
+		overflow-x: auto !important;
+	}
+
+	/* ── Top error banner ─────────────────────────────────────────────── */
+	#ht-banner {
+		position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+		background: #b71c1c;
+		color: #fff;
+		padding: 14px 20px;
+		font-size: 14px; font-weight: 600;
+		display: flex; align-items: center; justify-content: space-between;
+		transform: translateY(-110%);
+		transition: transform 0.2s ease;
+		box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+		pointer-events: none;
+	}
+	#ht-banner.ht-banner--visible { transform: translateY(0); pointer-events: auto; }
+	#ht-banner-close {
+		background: none; border: none; color: #fff;
+		font-size: 20px; line-height: 1; cursor: pointer;
+		padding: 0 4px; opacity: 0.75; margin-left: 24px;
+	}
+	#ht-banner-close:hover { opacity: 1; }
+
+</style>
+
 <script>
+
+	function updatePanelHeight() {
+		var content = document.querySelector('.hxtool5_content');
+		var tabBar  = document.querySelector('.ht-tab-bar');
+		if (!content || !tabBar) return;
+		var zoom = parseFloat(content.style.zoom) || 1.0;
+		var contentBottom = content.getBoundingClientRect().bottom;
+		var tabBottom     = tabBar.getBoundingClientRect().bottom;
+		// Convert from viewport px to local CSS px (local = viewport / zoom)
+		var panelH = Math.max(200, Math.floor((contentBottom - tabBottom - 8) / zoom));
+		document.documentElement.style.setProperty('--ht-panel-h', panelH + 'px');
+	}
 
 	function generateConditionList(myConditions, myId) {
 		$("#ruleViewPopup").find(".fe-modal__body").append("<div id='" + myId + "' class='clt'></div>");
@@ -30,26 +179,180 @@
 		$("#" + myId).html(r);
 	}
 
+	function generateLocalConditionList(conditions, containerId) {
+		var r = "<ul><li>or<ul>";
+		$.each(conditions, function(idx, tests) {
+			r += "<li>and<ul>";
+			$.each(tests, function(tidx, t) {
+				r += "<li>";
+				if (t['negate'] == true) {
+					r += "<span style='color: #ea475b; font-weight: bold;'>not </span>";
+				}
+				r += "<strong>" + $('<div>').text(t['token']).html() + "</strong> " + t['operator'] + " " + $('<div>').text(t['value']).html();
+				if (t['preservecase'] == true) {
+					r += "<span style='color: #59dc90;'> (case sensitive)</span>";
+				}
+				r += "</li>";
+			});
+			r += "</ul></li>";
+		});
+		r += "</ul></li></ul>";
+		$("#" + containerId).html(r);
+	}
+
+	function lcGetSelectedIds() {
+		var ids = [];
+		catalog_datatable.rows().eq(0).each(function(index) {
+			var row = catalog_datatable.row(index);
+			if ($("#" + row.data().local_catalog_id + "_check").is(":checked")) {
+				ids.push(row.data().local_catalog_id);
+			}
+		});
+		return ids;
+	}
+
+	function lcSyncSelectAll(api) {
+		var total = 0, checked = 0;
+		api.rows().eq(0).each(function(index) {
+			var data = api.row(index).data();
+			if (!data) return;
+			total++;
+			if ($("#" + data.local_catalog_id + "_check").is(":checked")) checked++;
+		});
+		var hdrChk = document.getElementById("selectAllCatalogCheck");
+		if (!hdrChk) return;
+		if (checked === 0) {
+			hdrChk.indeterminate = false; hdrChk.checked = false;
+		} else if (checked === total) {
+			hdrChk.indeterminate = false; hdrChk.checked = true;
+		} else {
+			hdrChk.indeterminate = true;
+		}
+	}
+
 
 	$(document).ready(function() {
 
+		var catalogInitialized = false;
+		var iocLastChecked = null;
+		var lcLastChecked = null;
+
+		// Show correct panel immediately based on URL hash (before any DT init)
+		var initialTab = (window.location.hash === '#catalog') ? 'catalog' : 'server';
+		if (initialTab === 'catalog') {
+			$('#panel-server').hide();
+			$('#panel-catalog').show();
+			$('#tab-server').removeClass('active');
+			$('#tab-catalog').addClass('active');
+		}
+
+		// ── Tab switching ─────────────────────────────────────────────────
+		function switchTab(tab) {
+			if (tab === 'catalog') {
+				$('#panel-server').hide();
+				$('#panel-catalog').show();
+				$('#tab-server').removeClass('active');
+				$('#tab-catalog').addClass('active');
+				if (!catalogInitialized) {
+					initCatalogTable();
+					catalogInitialized = true;
+				} else if (typeof catalog_datatable !== 'undefined' && catalog_datatable) {
+					catalog_datatable.columns.adjust().draw(false);
+				}
+				history.replaceState(null, '', window.location.pathname + '#catalog');
+			} else {
+				$('#panel-catalog').hide();
+				$('#panel-server').show();
+				$('#tab-catalog').removeClass('active');
+				$('#tab-server').addClass('active');
+				if (typeof ioc_datatable !== 'undefined' && ioc_datatable) {
+					ioc_datatable.columns.adjust().draw(false);
+				}
+				history.replaceState(null, '', window.location.pathname);
+			}
+		}
+
+		$('#tab-server').on('click', function() { switchTab('server'); });
+		$('#tab-catalog').on('click', function() { switchTab('catalog'); });
+
+		// Handle nav link clicks that update the hash while already on this page
+		$(window).on('hashchange', function() {
+			switchTab(window.location.hash === '#catalog' ? 'catalog' : 'server');
+		});
+
+		updatePanelHeight();
+
+		// Measure from the scrollBody's top to the panel's bottom and set the height
+		// explicitly so overflow-y: auto triggers a scrollbar regardless of flex behaviour.
+		function setScrollBodyH(dt, panelEl) {
+			if (!dt || !panelEl) return;
+			var sb = $(dt.table().node()).parent('.dataTables_scrollBody')[0];
+			if (!sb) return;
+			var zoom = parseFloat((document.querySelector('.hxtool5_content') || {}).style.zoom) || 1.0;
+			var panelBottom = panelEl.getBoundingClientRect().bottom;
+			var sbTop       = sb.getBoundingClientRect().top;
+			if (panelBottom <= 0 || sbTop <= 0) return; // panel is display:none — skip
+			var h = Math.max(100, Math.floor((panelBottom - sbTop) / zoom));
+			sb.style.height    = h + 'px';
+			sb.style.overflowY = 'auto';
+		}
+
+		// Re-measure when the font-scale zoom changes (A+ / A- buttons set style.zoom)
+		var _contentEl = document.querySelector('.hxtool5_content');
+		if (_contentEl) {
+			new MutationObserver(function() {
+				updatePanelHeight();
+				// Slight delay so the new zoom layout settles before we measure
+				setTimeout(function() {
+					if (typeof ioc_datatable !== 'undefined' && ioc_datatable)
+						setScrollBodyH(ioc_datatable, document.getElementById('panel-server'));
+					var cp = document.getElementById('panel-catalog');
+					if (typeof catalog_datatable !== 'undefined' && catalog_datatable && cp && cp.style.display !== 'none')
+						setScrollBodyH(catalog_datatable, cp);
+				}, 50);
+			}).observe(_contentEl, { attributes: true, attributeFilter: ['style'] });
+		}
+
+		$(window).on('resize.ht', function() {
+			updatePanelHeight();
+			if (typeof ioc_datatable !== 'undefined' && ioc_datatable) {
+				ioc_datatable.columns.adjust();
+				setScrollBodyH(ioc_datatable, document.getElementById('panel-server'));
+			}
+			if (typeof catalog_datatable !== 'undefined' && catalog_datatable) {
+				catalog_datatable.columns.adjust();
+				var cp = document.getElementById('panel-catalog');
+				if (cp && cp.style.display !== 'none')
+					setScrollBodyH(catalog_datatable, cp);
+			}
+		});
+
+		// ── SERVER RULES ──────────────────────────────────────────────────
 		hxtool_ajax_get_request("/api/v1/indicator_category/get_edit_policies", "", function(myCategoryPolicies) {
 			myEditPolicies = JSON.parse(myCategoryPolicies['api_response']);
 
 			ioc_datatable = $('#iocTable').DataTable( {
 				"ajax": "/api/v1/datatable_indicators",
-				"paging":   false,
-				"ordering": true,
-				"order": [[3,"asc"],[1,"asc"],[2,"desc"]],
-				"info":     false,
-				"searching": true,
-				"processing": false,
-				"dom": '<"hxtool_datatables_buttons"B>frtip',
+				"paging":        false,
+				"ordering":      true,
+				"order":         [[3,"asc"],[1,"asc"],[2,"desc"]],
+				"info":          false,
+				"searching":     true,
+				"processing":    false,
+				"scrollX":       true,
+				"dom": '<"ioc-dt-btns"B><"ioc-dt-filter"f>rtip',
 				"buttons": [
 					{ extend: "copy", className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
 					{ extend: "csv", className: "fe-btn", "text": "csv<i class='fe-icon--right fas fa-file'></i>" },
 					{ extend: "excel", className: "fe-btn", "text": "excel<i class='fe-icon--right fas fa-file-excel'></i>" }
 				],
+				"drawCallback": function() {
+					setScrollBodyH(this.api(), document.getElementById('panel-server'));
+				},
+				"initComplete": function() {
+					this.api().columns.adjust();
+					setScrollBodyH(this.api(), document.getElementById('panel-server'));
+				},
 				"columns": [
 					{ title: "", "data": "DT_RowId" },
 					{ title: "Name", "data": "display_name" },
@@ -61,7 +364,7 @@
 					{ title: "Hosts w/alerts", "data": "alerted_agents" },
 					{ title: "Action", "data": "DT_RowId" }
 				],
-				"columnDefs": [	
+				"columnDefs": [
 					{"className": "hxtool_table_cell_center", "targets": [2, 3, 4, 5, 6, 7, 8]},
 					{
 					 "targets": 0,
@@ -78,8 +381,9 @@
 					},
 					{
 					 "targets": 2,
+					 "width": "145px",
 					 render: function ( data, type, row, meta ) {
-					 	return (datatables_Timestamp(data));
+					 	return "<span style='white-space:nowrap;'>" + datatables_Timestamp(data) + "</span>";
 					 }
 					},
 					{
@@ -107,9 +411,12 @@
 					}
 				]
 			});
-			$('div.dataTables_filter input').addClass("fe-input");
-			
-			// Render categories
+			// Move DT buttons and filter into the toolbar row
+			$('#ioc-toolbar-right').append($('.ioc-dt-btns').detach());
+			$('#ioc-toolbar-right').append($('.ioc-dt-filter').detach());
+			$('#ioc-toolbar-right .dataTables_filter input').addClass("fe-input");
+
+			// Render categories for import modal
 			hxtool_ajax_get_request("/api/v1/indicator_category/list", "", function(setResponse) {
 				myCategoryResponse = JSON.parse(setResponse['api_response']);
 				mycats = [];
@@ -124,17 +431,49 @@
 				});
 				$("#categoryContainer").html(generateDropDown(catsDefaultName, "ruleImportCategory", catsDefault, entries=mycats, false, false));
 			});
-
 		});
 
+		// Shift+Click selection for server rules
+		$("#iocTable").on("click", "tbody input[type='checkbox']", function(e) {
+			if (e.shiftKey && iocLastChecked !== null) {
+				var $checks = $("#iocTable tbody input[type='checkbox']");
+				var start = $checks.index(this);
+				var end = $checks.index(iocLastChecked);
+				var isChecked = $(iocLastChecked).prop("checked");
+				$checks.slice(Math.min(start, end), Math.max(start, end) + 1).each(function() {
+					$(this).prop("checked", isChecked);
+					$(this).closest("tr").toggleClass("ioc-row-selected", isChecked);
+				});
+			} else {
+				$(this).closest("tr").toggleClass("ioc-row-selected", this.checked);
+			}
+			iocLastChecked = this;
+		});
+
+		// ── SERVER RULES — action handlers ───────────────────────────────
 		$("#iocTable").on("click", ".iocAction", function() {
-			if ($(this).data("type") == "edit") {
-				location.href = "/rtioc?indicator=" + encodeURIComponent($(this).data("url"));
+			if ($(this).data("type") == "edit") {
+				var rowData = ioc_datatable.row($(this).closest("tr")).data();
+				var params = new URLSearchParams({
+					indicator: rowData.url,
+					iocname: rowData.display_name,
+					description: rowData.description || '',
+					platforms: JSON.stringify(rowData.platforms)
+				});
+				location.href = "/rtioc?" + params.toString();
 			}
-			if ($(this).data("type") == "clone") {
-				location.href = "/rtioc?indicator=" + encodeURIComponent($(this).data("url")) + "&clone=true";
+			if ($(this).data("type") == "clone") {
+				var rowData = ioc_datatable.row($(this).closest("tr")).data();
+				var params = new URLSearchParams({
+					indicator: rowData.url,
+					iocname: rowData.display_name,
+					description: rowData.description || '',
+					platforms: JSON.stringify(rowData.platforms),
+					clone: 'true'
+				});
+				location.href = "/rtioc?" + params.toString();
 			}
-			if ($(this).data("type") == "remove") {
+			if ($(this).data("type") == "remove") {
 				myrow = $(this).closest("tr");
 				hxtool_ajax_get_request("/api/v1/indicators/remove", "url=" + encodeURIComponent($(this).data("url")), function() {
 					myrow.fadeOut(200, function() {
@@ -142,14 +481,69 @@
 					});
 				});
 			}
-			if ($(this).data("type") == "view") {
+			if ($(this).data("type") == "view") {
+				var rowData = ioc_datatable.row($(this).closest("tr")).data();
 				hxtool_ajax_get_request("/api/v1/indicators/get/conditions", "uuid=" + $(this).data("id") + "&url=" + encodeURIComponent($(this).data("url")), function(myConditionsResponse) {
-					myConditions = JSON.parse(myConditionsResponse['api_response']);
-
-					// First empty the container
 					$("#ruleViewPopup").find(".fe-modal__body").html("");
 
-					// Generate the lists of conditions
+					var metaHtml = "<div style='margin-bottom:12px;'>";
+					if (rowData.display_name) metaHtml += "<p style='font-weight:bold; font-size:15px; margin-bottom:4px;'>" + $("<div>").text(rowData.display_name).html() + "</p>";
+					if (rowData.description) metaHtml += "<p style='color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:4px;'>" + $("<div>").text(rowData.description).html() + "</p>";
+					metaHtml += "<p style='color:rgba(255,255,255,0.45); font-size:11px;'>" + $("<div>").text(rowData.category_name).html() + " &bull; " + (rowData.platforms || []).join(", ") + "</p>";
+					metaHtml += "</div>";
+
+					if (!myConditionsResponse['api_success']) {
+						var errData = {};
+						try { errData = JSON.parse(myConditionsResponse['api_response']); } catch(e) {}
+
+						var details = [];
+						try {
+							var hxErr = errData['hx_error'] || {};
+							var src = hxErr['presence'] || hxErr['execution'] || hxErr;
+							(src['details'] || []).forEach(function(d) { details.push('Code ' + d['code'] + ': ' + d['message']); });
+						} catch(e) {}
+
+						var html = metaHtml
+							+ "<p style='color:#ea475b; font-weight:bold; margin-bottom:8px;'>&#9888; Access denied</p>"
+							+ "<p style='margin-bottom:12px;'>" + $('<div>').text(errData['message'] || 'Could not load rule conditions.').html() + "</p>";
+						if (errData['hx_api_endpoint']) {
+							html += "<table style='font-size:12px; color:rgba(255,255,255,0.55); border-collapse:collapse; width:100%;'>"
+								+ "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top;'>HX API endpoint</td>"
+								+ "<td style='padding:2px 0; font-family:monospace;'>" + errData['hx_api_endpoint'] + "</td></tr>"
+								+ "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap;'>HTTP status</td>"
+								+ "<td style='padding:2px 0;'>" + (errData['hx_response_code'] || myConditionsResponse['api_response_code']) + "</td></tr>";
+							if (details.length) {
+								html += "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top;'>HX error</td>"
+									+ "<td style='padding:2px 0;'>" + details.join('<br>') + "</td></tr>";
+							}
+							html += "</table>";
+						}
+						if (errData['role_hint']) {
+							html += "<div style='margin-top:14px; padding:10px 14px; background:rgba(255,193,7,0.12); border-left:4px solid #ffc107; border-radius:3px;'>"
+								+ "<p style='margin:0 0 4px; font-size:12px; font-weight:bold; color:#ffc107; letter-spacing:0.03em;'>&#128274;&nbsp; Required HX User Permissions</p>"
+								+ "<p style='margin:0; font-size:12px; color:rgba(255,255,255,0.85);'>" + $('<div>').text(errData['role_hint']).html() + "</p>"
+								+ "</div>";
+						}
+						var rawJson = JSON.stringify(myConditionsResponse, null, 2);
+						html += "<details style='margin-top:18px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;'>"
+							+ "<summary style='cursor:pointer; font-size:12px; color:rgba(255,255,255,0.45); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;'>"
+							+ "<span class='raw-arrow' style='font-size:10px;'>&#9654;</span> Raw JSON response"
+							+ "</summary>"
+							+ "<pre style='margin-top:10px; font-size:11px; color:rgba(255,255,255,0.65); background:rgba(0,0,0,0.3); border-radius:4px; padding:12px; overflow-x:auto; white-space:pre;'>"
+							+ $('<div>').text(rawJson).html()
+							+ "</pre>"
+							+ "</details>";
+						html += "</div>";
+						$("#ruleViewPopup").find(".fe-modal__body").html(html);
+						$("#ruleViewPopup").find("details").on("toggle", function() {
+							$(this).find(".raw-arrow").html(this.open ? "&#9660;" : "&#9654;");
+						});
+						$("#ruleViewPopup").show();
+						return;
+					}
+
+					var myConditions = JSON.parse(myConditionsResponse['api_response']);
+					$("#ruleViewPopup").find(".fe-modal__body").prepend(metaHtml);
 					if (myConditions['presence']['data']['entries'].length > 0) {
 						$("#ruleViewPopup").find(".fe-modal__body").append("<h3 class='hxtool_typography_h3'>Conditions for detecting presence</h3>");
 						generateConditionList(myConditions['presence']['data']['entries'], "presenceList");
@@ -159,17 +553,26 @@
 						$("#ruleViewPopup").find(".fe-modal__body").append("<h3 class='hxtool_typography_h3'>Conditions for detecting execution</h3>");
 						generateConditionList(myConditions['execution']['data']['entries'], "executionList");
 					}
-
+					var rawJson = JSON.stringify(myConditions, null, 2);
+					$("#ruleViewPopup").find(".fe-modal__body").append(
+						"<details style='margin-top:18px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;'>"
+						+ "<summary style='cursor:pointer; font-size:12px; color:rgba(255,255,255,0.45); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;'>"
+						+ "<span class='raw-arrow' style='font-size:10px;'>&#9654;</span> Raw JSON response"
+						+ "</summary>"
+						+ "<pre style='margin-top:10px; font-size:11px; color:rgba(255,255,255,0.65); background:rgba(0,0,0,0.3); border-radius:4px; padding:12px; overflow-x:auto; white-space:pre;'>"
+						+ $('<div>').text(rawJson).html()
+						+ "</pre>"
+						+ "</details>"
+					);
+					$("#ruleViewPopup").find("details").on("toggle", function() {
+						$(this).find(".raw-arrow").html(this.open ? "&#9660;" : "&#9654;");
+					});
 					$("#ruleViewPopup").show();
 				});
 			}
 		});
 
-		$("#ruleViewDismiss").click(function() {
-			$("#ruleViewPopup").hide();
-		});
-		
-		$('#importButton').click(function(){ 
+		$('#importButton').click(function(){
 			$('#ruleImportPopup').show();
 		});
 
@@ -178,20 +581,68 @@
 		});
 
 		$('#ruleImportSubmit').click(function(){
+			var files = $('#ruleImportFile').prop('files');
+			if (!files || files.length === 0) {
+				var html = "<p style='color:#ea475b; font-weight:bold;'>&#9888; No file selected.</p>"
+					+ "<p style='font-size:12px; color:rgba(255,255,255,0.6);'>Please choose one or more rule files before submitting.</p>";
+				$("#hxtoolMessageBody").html(html);
+				$("#hxtoolMessage").show();
+				return;
+			}
+
 			$('#ruleImportPopup').hide();
 
 			var data = new FormData();
-			$.each($('#ruleImportFile').prop('files'), function(key, value) {
+			$.each(files, function(key, value) {
 				data.append("ruleImport", value);
 			});
-			
 			data.append('category', $('#ruleImportCategory').data("id"));
 			data.append('platform', $('#ruleImportPlatform').data("id"));
-			
-			hxtool_ajax_post_request("/api/v1/indicators/import", data, function() {
-				ioc_datatable.ajax.reload();
-			});
 
+			hxtool_ajax_post_request("/api/v1/indicators/import", data, function(res) {
+				ioc_datatable.ajax.reload();
+
+				var summary = {};
+				try { summary = JSON.parse(res['api_response']); } catch(e) {}
+
+				var imported     = summary['imported']      || [];
+				var failed       = summary['failed']        || [];
+				var invalidFiles = summary['invalid_files'] || [];
+				var total = imported.length + failed.length + invalidFiles.length;
+
+				var html = "";
+				if (total === 0) {
+					html = "<p style='color:#ea475b; font-weight:bold;'>&#9888; No rules were imported.</p>"
+						+ "<p style='font-size:12px; color:rgba(255,255,255,0.6);'>The submitted file(s) contained no valid indicators.</p>";
+				} else {
+					if (imported.length > 0) {
+						html += "<p style='color:#4caf50; font-weight:bold; margin-bottom:4px;'>&#10003; Imported " + imported.length + " rule" + (imported.length === 1 ? "" : "s") + " successfully.</p>";
+						html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+						imported.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+						html += "</ul>";
+					}
+					if (failed.length > 0) {
+						html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#10007; Failed to import " + failed.length + " rule" + (failed.length === 1 ? "" : "s") + ".</p>";
+						html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 10px 16px; padding:0;'>";
+						failed.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+						html += "</ul>";
+						html += "<div style='margin-top:6px; padding:10px 14px; background:rgba(255,193,7,0.12); border-left:4px solid #ffc107; border-radius:3px;'>"
+							+ "<p style='margin:0 0 4px; font-size:12px; font-weight:bold; color:#ffc107; letter-spacing:0.03em;'>&#128274;&nbsp; Required HX User Permissions</p>"
+							+ "<p style='margin:0; font-size:12px; color:rgba(255,255,255,0.85);'>Creating indicators requires the <strong>API Admin</strong> role on the HX controller. "
+							+ "The HX user account used by HXTool must be assigned this role in HX platform user management. "
+							+ "Contact your HX administrator to have the correct role assigned.</p>"
+							+ "</div>";
+					}
+					if (invalidFiles.length > 0) {
+						html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#9888; " + invalidFiles.length + " file" + (invalidFiles.length === 1 ? "" : "s") + " could not be parsed.</p>";
+						html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+						invalidFiles.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + " — not a valid HX JSON or OpenIOC 1.1 file</li>"; });
+						html += "</ul>";
+					}
+				}
+				$("#hxtoolMessageBody").html(html);
+				$("#hxtoolMessage").show();
+			});
 		});
 
 		$("#exportButton").click(function() {
@@ -208,8 +659,11 @@
 						"platforms": row.data()['platforms']
 					};
 				}
-
 			});
+			if (Object.keys(myExports).length === 0) {
+				showHtBanner('No rules selected.');
+				return;
+			}
 			$.ajax
 			({
 				type: 'POST',
@@ -224,7 +678,7 @@
 					if (disposition && disposition.indexOf('attachment') !== -1) {
 						var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
 						var matches = filenameRegex.exec(disposition);
-						if (matches != null && matches[1]) { 
+						if (matches != null && matches[1]) {
 							filename = matches[1].replace(/['"]/g, '');
 						}
 					}
@@ -244,25 +698,616 @@
 		$("#createButton").click(function() {
 			location.href = "/rtioc";
 		});
-		
+
+		$("#addToCatalogButton").click(function() {
+			var indicators = [];
+			ioc_datatable.rows().eq(0).each(function(index) {
+				var row = ioc_datatable.row(index);
+				if ($("#" + row.data()['DT_RowId'] + "_check").is(":checked")) {
+					indicators.push({
+						uri_name:          row.data()['uri_name'],
+						category_name:     row.data()['category_name'],
+						category_uri_name: row.data()['category_uri_name'],
+						display_name:      row.data()['display_name'],
+						description:       row.data()['description'] || '',
+						platforms:         row.data()['platforms'],
+						created_by:        row.data()['created_by']
+					});
+				}
+			});
+			if (indicators.length === 0) {
+				showHtBanner('No rules selected.');
+				return;
+			}
+			var btn = $(this);
+			btn.prop("disabled", true).html(" Adding… <i class='fe-icon--right fas fa-spinner fa-spin'></i>");
+			$.ajax({
+				type: 'POST',
+				url: '/api/v1/local_catalog/add_from_indicator',
+				contentType: 'application/json',
+				data: JSON.stringify({ indicators: indicators }),
+				success: function(res) {
+					var summary = {};
+					try { summary = JSON.parse(res['api_response']); } catch(e) {}
+					var html = "<p style='color:#4caf50; font-weight:bold; margin-bottom:4px;'>&#10003; Added to Local Catalog.</p>"
+						+ "<p style='font-size:12px; color:rgba(255,255,255,0.7);'>New: " + (summary.added || 0)
+						+ " &bull; Updated: " + (summary.updated || 0)
+						+ (summary.failed && summary.failed.length ? " &bull; <span style='color:#ea475b;'>Failed: " + summary.failed.length + "</span>" : "")
+						+ "</p>";
+					$("#hxtoolMessageBody").html(html);
+					$("#hxtoolMessage").show();
+				},
+				error: hxtoolActionFail,
+				complete: function() {
+					btn.prop("disabled", false).html(" Add to Local Catalog <i class='fe-icon--right fas fa-database'></i>");
+				}
+			});
+		});
+
+
+		// ── LOCAL CATALOG (lazy init on first tab switch) ─────────────────
+		function initCatalogTable() {
+			catalog_datatable = $('#catalogTable').DataTable({
+				"ajax": "/api/v1/datatable_local_catalog",
+				"paging":        false,
+				"ordering":      true,
+				"order":         [[2, "asc"], [1, "asc"]],
+				"info":          false,
+				"searching":     true,
+				"processing":    false,
+				"scrollX":       true,
+				"dom": '<"cat-dt-btns"B><"cat-dt-filter"f>rtip',
+				"buttons": [
+					{ extend: "copy",  className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
+					{ extend: "csv",   className: "fe-btn", "text": "csv<i class='fe-icon--right fas fa-file'></i>" },
+					{ extend: "excel", className: "fe-btn", "text": "excel<i class='fe-icon--right fas fa-file-excel'></i>" }
+				],
+				"drawCallback": function() {
+					setScrollBodyH(this.api(), document.getElementById('panel-catalog'));
+				},
+				"initComplete": function() {
+					this.api().columns.adjust();
+					setScrollBodyH(this.api(), document.getElementById('panel-catalog'));
+				},
+				"columns": [
+					{ title: "",            "data": "local_catalog_id" },
+					{ title: "Name",        "data": "name" },
+					{ title: "Category",    "data": "category" },
+					{ title: "Platforms",   "data": "platforms" },
+					{ title: "Description", "data": "description" },
+					{ title: "Presence",    "data": "presence_count" },
+					{ title: "Execution",   "data": "execution_count" },
+					{ title: "Created",     "data": "create_timestamp" },
+					{ title: "Action",      "data": "local_catalog_id" }
+				],
+				"columnDefs": [
+					{ "className": "hxtool_table_cell_center", "targets": [2, 3, 5, 6, 7, 8] },
+					{
+						"targets": 0,
+						"width": "34px",
+						render: function(data, type, row) {
+							return "&nbsp;<input id='" + row.local_catalog_id + "_check' type='checkbox' />";
+						}
+					},
+					{
+						"targets": 1,
+						"width": "280px"
+					},
+					{
+						"targets": 2,
+						"width": "1px"		// shrink to content — DT will expand to fit widest cell
+					},
+					{
+						"targets": 3,
+						"width": "1px",		// shrink to content
+						render: function(data, type, row) {
+							return Array.isArray(data) ? data.join(", ") : (data || "");
+						}
+					},
+					{
+						"targets": 4,
+						"width": "300px"
+					},
+					{
+						"targets": 5,
+						"width": "52px"
+					},
+					{
+						"targets": 6,
+						"width": "52px"
+					},
+					{
+						"targets": 7,
+						"width": "160px",
+						render: function(data, type, row) {
+							return data || "";
+						}
+					},
+					{
+						"targets": 8,
+						"width": "280px",
+						render: function(data, type, row) {
+							return "<button style='margin-right:4px;' class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='view' data-id='" + row.local_catalog_id + "'>view<i class='fe-icon--right fas fa-eye'></i></button>"
+								 + "<button style='margin-right:4px;' class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='edit' data-id='" + row.local_catalog_id + "'>edit<i class='fe-icon--right fas fa-edit'></i></button>"
+								 + "<button class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main-remove' data-type='remove' data-id='" + row.local_catalog_id + "'>remove<i class='fe-icon--right fas fa-trash'></i></button>";
+						}
+					}
+				]
+			});
+			// Move DT buttons and filter into the catalog toolbar row
+			$('#cat-toolbar-right').append($('.cat-dt-btns').detach());
+			$('#cat-toolbar-right').append($('.cat-dt-filter').detach());
+			$('#cat-toolbar-right .dataTables_filter input').addClass("fe-input");
+
+			// Shift+Click selection for catalog
+			$("#catalogTable").on("click", "tbody input[type='checkbox']", function(e) {
+				if (e.shiftKey && lcLastChecked !== null) {
+					var $checks = $("#catalogTable tbody input[type='checkbox']");
+					var start = $checks.index(this);
+					var end = $checks.index(lcLastChecked);
+					var isChecked = $(lcLastChecked).prop("checked");
+					$checks.slice(Math.min(start, end), Math.max(start, end) + 1).each(function() {
+						$(this).prop("checked", isChecked);
+						$(this).closest("tr").toggleClass("lc-row-selected", isChecked);
+					});
+					lcSyncSelectAll(catalog_datatable);
+				} else {
+					$(this).closest("tr").toggleClass("lc-row-selected", this.checked);
+					lcSyncSelectAll(catalog_datatable);
+				}
+				lcLastChecked = this;
+			});
+
+			// Row click toggles checkbox (skip checkbox cell and action cell)
+			$("#catalogTable").on("click", "tbody tr td:not(:first-child):not(:last-child)", function() {
+				var row = $(this).closest("tr");
+				var chk = row.find("td:first-child input[type='checkbox']");
+				chk.prop("checked", !chk.prop("checked"));
+				row.toggleClass("lc-row-selected", chk.prop("checked"));
+				lcSyncSelectAll(catalog_datatable);
+				lcLastChecked = chk[0];
+			});
+
+			// Checkbox direct change (without click propagation)
+			$("#catalogTable").on("change", "tbody input[type='checkbox']", function() {
+				$(this).closest("tr").toggleClass("lc-row-selected", this.checked);
+				lcSyncSelectAll(catalog_datatable);
+			});
+
+			// ── Catalog — row action handler ──────────────────────────────
+			$("#catalogTable").on("click", ".catalogAction", function() {
+				var type = $(this).data("type");
+				var cid  = $(this).data("id");
+
+				if (type === "remove") {
+					var myrow = $(this).closest("tr");
+					$.ajax({
+						type: 'DELETE',
+						url: '/api/v1/local_catalog',
+						contentType: 'application/json',
+						data: JSON.stringify({ ids: [cid] }),
+						success: function() {
+							myrow.fadeOut(200, function() {
+								catalog_datatable.row(myrow).remove().draw();
+							});
+						},
+						error: hxtoolActionFail
+					});
+				}
+
+				if (type === "edit") {
+					location.href = "/local_catalog_edit/" + cid;
+				}
+
+				if (type === "view") {
+					var rowData = catalog_datatable.row($(this).closest("tr")).data();
+					var body = $("#ruleViewPopup").find(".fe-modal__body");
+					body.html("");
+
+					var meta = "<div style='margin-bottom:12px;'>";
+					meta += "<p style='font-weight:bold; font-size:15px; margin-bottom:4px;'>" + $("<div>").text(rowData.name).html() + "</p>";
+					if (rowData.description) {
+						meta += "<p style='color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:4px;'>" + $("<div>").text(rowData.description).html() + "</p>";
+					}
+					var plats = Array.isArray(rowData.platforms) ? rowData.platforms.join(", ") : (rowData.platforms || "");
+					meta += "<p style='color:rgba(255,255,255,0.45); font-size:11px;'>" + $("<div>").text(rowData.category).html() + " &bull; " + plats + "</p>";
+					meta += "</div>";
+					body.html(meta);
+
+					$.ajax({
+						type: 'GET',
+						url: '/api/v1/local_catalog/' + cid,
+						success: function(entry) {
+							if (entry && entry.presence && entry.presence.length > 0) {
+								body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting presence</h3><div id='lcPresenceList'></div>");
+								generateLocalConditionList(entry.presence, 'lcPresenceList');
+								body.append("<br>");
+							}
+							if (entry && entry.execution && entry.execution.length > 0) {
+								body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting execution</h3><div id='lcExecutionList'></div>");
+								generateLocalConditionList(entry.execution, 'lcExecutionList');
+							}
+							if ((!entry.presence || entry.presence.length === 0) && (!entry.execution || entry.execution.length === 0)) {
+								body.append("<p style='color:rgba(255,255,255,0.4); font-size:13px;'>No conditions stored.</p>");
+							}
+						},
+						error: function() {
+							body.append("<p style='color:#ea475b;'>Could not load rule conditions.</p>");
+						}
+					});
+
+					$("#ruleViewPopup").show();
+				}
+			});
+
+			// ── Catalog — Mirror from Controller ──────────────────────────
+			$("#lcMirrorButton").click(function() {
+				var btn = $(this);
+				btn.prop("disabled", true).html(" Mirroring… <i class='fe-icon--right fas fa-spinner fa-spin'></i>");
+				$.ajax({
+					type: 'POST',
+					url: '/api/v1/local_catalog/mirror',
+					contentType: 'application/json',
+					data: JSON.stringify({}),
+					success: function(res) {
+						catalog_datatable.ajax.reload();
+						var summary = {};
+						try { summary = JSON.parse(res['api_response']); } catch(e) {}
+						var html = "<p style='color:#4caf50; font-weight:bold;'>&#10003; Mirror complete.</p>"
+							+ "<p style='font-size:12px; color:rgba(255,255,255,0.7);'>Added: " + (summary.added || 0)
+							+ " &bull; Updated: " + (summary.updated || 0)
+							+ (summary.failed && summary.failed.length ? " &bull; <span style='color:#ea475b;'>Failed: " + summary.failed.length + "</span>" : "")
+							+ "</p>";
+						$("#hxtoolMessageBody").html(html);
+						$("#hxtoolMessage").show();
+					},
+					error: hxtoolActionFail,
+					complete: function() {
+						btn.prop("disabled", false).html(" Mirror from Controller <i class='fe-icon--right fas fa-sync'></i>");
+					}
+				});
+			});
+
+			// ── Catalog — Upload Selected ─────────────────────────────────
+			$("#lcUploadButton").click(function() {
+				var ids = lcGetSelectedIds();
+				if (ids.length === 0) {
+					showHtBanner('No rules selected.');
+					return;
+				}
+				$.ajax({
+					type: 'POST',
+					url: '/api/v1/local_catalog/upload',
+					contentType: 'application/json',
+					data: JSON.stringify({ ids: ids }),
+					success: function(res) {
+						var summary = {};
+						try { summary = JSON.parse(res['api_response']); } catch(e) {}
+						var uploaded = summary.uploaded || [];
+						var failed   = summary.failed   || [];
+						var html = "";
+						if (uploaded.length > 0) {
+							html += "<p style='color:#4caf50; font-weight:bold; margin-bottom:4px;'>&#10003; Uploaded " + uploaded.length + " rule" + (uploaded.length === 1 ? "" : "s") + " to controller.</p>";
+						}
+						if (failed.length > 0) {
+							html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#10007; Failed: " + failed.length + "</p>";
+							html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+							failed.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+							html += "</ul>";
+						}
+						if (!html) { html = "<p style='color:rgba(255,255,255,0.5);'>Nothing was uploaded.</p>"; }
+						$("#hxtoolMessageBody").html(html);
+						$("#hxtoolMessage").show();
+					},
+					error: hxtoolActionFail
+				});
+			});
+
+			// ── Catalog — Export Selected ─────────────────────────────────
+			$("#lcExportButton").click(function() {
+				var ids = lcGetSelectedIds();
+				if (ids.length === 0) {
+					showHtBanner('No rules selected.');
+					return;
+				}
+				$.ajax({
+					type: 'POST',
+					url: '/api/v1/local_catalog/export',
+					contentType: 'application/json',
+					xhrFields: { responseType: 'blob' },
+					processData: false,
+					data: JSON.stringify({ ids: ids }),
+					success: function(data, status, xhr) {
+						var filename = "local_catalog_export.rule";
+						var disposition = xhr.getResponseHeader('Content-Disposition');
+						if (disposition) {
+							var m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+							if (m && m[1]) filename = m[1].replace(/['"]/g, '');
+						}
+						var url = URL.createObjectURL(new File([data], {type: xhr.getResponseHeader('Content-Type')}));
+						var a = document.createElement('a');
+						a.href = url; a.target = '_blank'; a.download = filename;
+						a.click(); a.remove();
+						URL.revokeObjectURL(url);
+					},
+					error: hxtoolActionFail
+				});
+			});
+
+			// ── Catalog — Delete Selected ─────────────────────────────────
+			$("#lcDeleteButton").click(function() {
+				var ids = lcGetSelectedIds();
+				if (ids.length === 0) {
+					showHtBanner('No rules selected.');
+					return;
+				}
+				$.ajax({
+					type: 'DELETE',
+					url: '/api/v1/local_catalog',
+					contentType: 'application/json',
+					data: JSON.stringify({ ids: ids }),
+					success: function() {
+						catalog_datatable.ajax.reload();
+					},
+					error: hxtoolActionFail
+				});
+			});
+
+			// ── Catalog — Create new rule ─────────────────────────────────
+			$('#lcCreateButton').click(function() {
+				window.location.href = '/rtioc?mode=catalog';
+			});
+
+			// ── Catalog — Import ──────────────────────────────────────────
+			$('#lcImportButton').click(function() {
+				$('#catalogImportPopup').show();
+			});
+
+			$('#catalogImportCancel').click(function() {
+				$('#catalogImportPopup').hide();
+			});
+
+			$('#catalogImportSubmit').click(function() {
+				var files = $('#catalogImportFile').prop('files');
+				if (!files || files.length === 0) {
+					$("#hxtoolMessageBody").html("<p style='color:#ea475b; font-weight:bold;'>&#9888; No file selected.</p>"
+						+ "<p style='font-size:12px; color:rgba(255,255,255,0.6);'>Please choose one or more rule files before submitting.</p>");
+					$("#hxtoolMessage").show();
+					return;
+				}
+				$('#catalogImportPopup').hide();
+
+				var data = new FormData();
+				$.each(files, function(key, value) { data.append("ruleImport", value); });
+				data.append('platform', 'all');
+
+				hxtool_ajax_post_request("/api/v1/local_catalog/import", data, function(res) {
+					catalog_datatable.ajax.reload();
+					var summary = {};
+					try { summary = JSON.parse(res['api_response']); } catch(e) {}
+					var imported     = summary.imported      || [];
+					var failed       = summary.failed        || [];
+					var invalidFiles = summary.invalid_files || [];
+					var html = "";
+					if (imported.length > 0) {
+						html += "<p style='color:#4caf50; font-weight:bold; margin-bottom:4px;'>&#10003; Imported " + imported.length + " rule" + (imported.length === 1 ? "" : "s") + " into catalog.</p>";
+					}
+					if (failed.length > 0) {
+						html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#10007; Failed: " + failed.length + "</p>";
+						html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+						failed.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+						html += "</ul>";
+					}
+					if (invalidFiles.length > 0) {
+						html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#9888; " + invalidFiles.length + " invalid file(s).</p>";
+						html += "<ul style='font-size:12px; color:rgba(255,255,255,0.7); margin:0 0 8px 16px; padding:0;'>";
+						invalidFiles.forEach(function(n) { html += "<li>" + $('<div>').text(n).html() + "</li>"; });
+						html += "</ul>";
+					}
+					if (!html) { html = "<p style='color:rgba(255,255,255,0.5);'>No rules were imported.</p>"; }
+					$("#hxtoolMessageBody").html(html);
+					$("#hxtoolMessage").show();
+				});
+			});
+
+			// ── Catalog — Hunt ────────────────────────────────────────────
+			var _lcHuntSelectedRows = [];
+
+			$("#lcHuntButton").click(function() {
+				_lcHuntSelectedRows = [];
+				catalog_datatable.rows().eq(0).each(function(index) {
+					var d = catalog_datatable.row(index).data();
+					if (d && $("#" + d.local_catalog_id + "_check").is(":checked")) {
+						_lcHuntSelectedRows.push({ id: d.local_catalog_id, name: d.name });
+					}
+				});
+				if (_lcHuntSelectedRows.length === 0) {
+					showHtBanner('No rules selected.');
+					return;
+				}
+				var html = "";
+				if (_lcHuntSelectedRows.length > 1) {
+					html += "<p style='margin-bottom:6px;'>" + _lcHuntSelectedRows.length + " Enterprise Searches will be created:</p>";
+				}
+				html += _lcHuntSelectedRows.map(function(r) {
+					return "<div><strong>HUNT_" + $("<div>").text(r.name).html() + "</strong></div>";
+				}).join("");
+				$("#lcHuntNameList").html(html);
+
+				if ($("#lcHuntHostsetList").children().length === 0) {
+					$.getJSON('/api/v1/hostsets/list', function(resp) {
+						var parsed, entries = [];
+						try { parsed = JSON.parse(resp.api_response); entries = parsed.data.entries; } catch(e) {}
+						var items = "";
+						$.each(entries, function(_, hs) {
+							items += "<li class='fe-dropdown__item'><a class='fe-dropdown__item-link'>"
+								+ "<span class='fe-dropdown__item-link-left-section'><i style='margin-top:2px;' class='fas fa-check fa-lg'></i></span>"
+								+ "<span class='fe-dropdown__item-link-text' data-id='" + hs._id + "'>" + $("<div>").text(hs.name).html() + "</span>"
+								+ "</a></li>";
+						});
+						$("#lcHuntHostsetList").html(items);
+						$.each(entries, function(_, hs) {
+							if (hs._id === 9) {
+								$("#lcHuntHostset")
+									.html($("<div>").text(hs.name).html() + " <i class='fe-icon--right fas fa-chevron-up'></i>")
+									.data("id", hs._id);
+							}
+						});
+					});
+				}
+				$("#lcHuntPopup").show();
+			});
+
+			$("#lcHuntCancel").click(function() { $("#lcHuntPopup").hide(); });
+
+			$("#lcHuntSubmit").click(function() {
+				var hostsetId = $("#lcHuntHostset").data("id");
+				if (!hostsetId || hostsetId === "false") {
+					alert("Please select a host set.");
+					return;
+				}
+				var schedule = $("input[name='schedule']:checked").val() || "run_now";
+				var payload = {
+					ids: _lcHuntSelectedRows.map(function(r) { return r.id; }),
+					sweephostset: String(hostsetId),
+					schedule: schedule
+				};
+				if (schedule === "run_at") {
+					payload.run_at_value = $("#run_at_value").val();
+				} else if (schedule === "run_interval") {
+					payload.interval_value = $("#interval_value").val();
+					payload.interval_unit  = $("#interval_unit").data("id");
+					payload.interval_start = $("input[name='interval_start']:checked").val();
+					payload.interval_start_value = $("#interval_start_value").val();
+				}
+				var btn = $(this);
+				btn.prop("disabled", true).html("<span> Submitting&hellip; </span>");
+				$.ajax({
+					type: "POST",
+					url: "/api/v1/enterprise_search/new/local_catalog",
+					contentType: "application/json",
+					data: JSON.stringify(payload),
+					success: function(resp) {
+						$("#lcHuntPopup").hide();
+						var msg = "<p style='color:#4caf50; font-weight:bold;'>&#10003; " + resp.created + " Hunt search" + (resp.created !== 1 ? "es" : "") + " submitted.</p>"
+							+ "<p style='font-size:12px;'><a href='/search#enterprise'>View in Enterprise Search</a></p>";
+						if (resp.failed && resp.failed.length) {
+							msg += "<p style='color:#ea475b; font-size:12px;'>" + resp.failed.length + " rule(s) could not be submitted (no conditions).</p>";
+						}
+						$("#hxtoolMessageBody").html(msg);
+						$("#hxtoolMessage").show();
+					},
+					error: hxtoolActionFail,
+					complete: function() { btn.prop("disabled", false).html("<span> Hunt </span>"); }
+				});
+			});
+		}
+
+
+		// ── Shared modal dismiss ──────────────────────────────────────────
+		$("#ruleViewDismiss").click(function() {
+			$("#ruleViewPopup").hide();
+		});
+
+		// Init catalog table if starting on catalog tab
+		if (initialTab === 'catalog') {
+			initCatalogTable();
+			catalogInitialized = true;
+		}
+
 	});
 </script>
 
-{{ htPanelNoHeader.widgetHeader(panelDisplay="inline-block") }}
-	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="exportButton"> Export selected <i style='color: #11a962;' class="fe-icon--right fas fa-file-export"></i></button>
-	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="importButton"> Import <i style='color: #11a962;' class="fe-icon--right fas fa-file-import"></i></button>
-	<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="createButton"> Create new rule <i style='color: #11a962;' class="fe-icon--right fas fa-plus"></i></button>
+<div id="ht-banner" role="alert" aria-live="assertive">
+	<span id="ht-banner-msg"></span>
+	<button id="ht-banner-close" aria-label="Dismiss">&times;</button>
+</div>
+
+<script>
+	var _htBannerTimer = null;
+	function showHtBanner(msg) {
+		clearTimeout(_htBannerTimer);
+		var $b = $('#ht-banner');
+		function _show() {
+			$('#ht-banner-msg').text(msg);
+			$b.addClass('ht-banner--visible');
+			_htBannerTimer = setTimeout(function() {
+				$b.removeClass('ht-banner--visible');
+			}, 10000);
+		}
+		if ($b.hasClass('ht-banner--visible')) {
+			$b.removeClass('ht-banner--visible');
+			setTimeout(_show, 220);
+		} else {
+			_show();
+		}
+	}
+	$(document).ready(function() {
+		$('#ht-banner-close').click(function() {
+			clearTimeout(_htBannerTimer);
+			$('#ht-banner').removeClass('ht-banner--visible');
+		});
+	});
+</script>
+
+<!-- Tab bar -->
+<div class="ht-tab-bar">
+	<button class="ht-tab active" id="tab-server">Server Rules</button>
+	<button class="ht-tab" id="tab-catalog">Local Catalog</button>
+</div>
+
+<!-- ── Panel: Server Rules ───────────────────────────────────────────── -->
+<div id="panel-server">
+{{ htPanelNoHeader.widgetHeader(panelDisplay="block") }}
+<div class="ht-toolbar-row">
+	<div class="ht-toolbar-left">
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="exportButton"> Export <i style='color: #11a962;' class="fe-icon--right fas fa-file-export"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="importButton"> Import <i style='color: #11a962;' class="fe-icon--right fas fa-file-import"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="addToCatalogButton"> Add to Local Catalog <i style='color: #11a962;' class="fe-icon--right fas fa-database"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="createButton"> Create new rule <i style='color: #11a962;' class="fe-icon--right fas fa-plus"></i></button>
+	</div>
+	<div class="ht-toolbar-right" id="ioc-toolbar-right"></div>
+</div>
 {{ htPanelNoHeader.widgetFooter() }}
 
-{{ htPanel.widgetHeader("Rules", panelId="iocTableContainer", panelIcon="fa-table") }}
+<div style="margin-top:8px">
+{{ htPanelNoHeader.widgetHeader(panelId="iocTableContainer", panelDisplay="block") }}
 	<table style='width: 100%;' id='iocTable' class='hxtool_table'></table>
-{{ htPanel.widgetFooter() }}
+{{ htPanelNoHeader.widgetFooter() }}
+</div>
+</div>
 
+<!-- ── Panel: Local Catalog ──────────────────────────────────────────── -->
+<div id="panel-catalog" style="display:none">
+{{ htPanelNoHeader.widgetHeader(panelDisplay="block") }}
+<div class="ht-toolbar-row">
+	<div class="ht-toolbar-left">
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcExportButton"> Export <i style='color: #11a962;' class="fe-icon--right fas fa-file-export"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcImportButton"> Import <i style='color: #11a962;' class="fe-icon--right fas fa-file-import"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcDeleteButton"> Delete <i style='color: #ea475b;' class="fe-icon--right fas fa-trash"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcCreateButton"> Create new rule <i style='color: #11a962;' class="fe-icon--right fas fa-plus"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcUploadButton"> Upload selected <i style='color: #11a962;' class="fe-icon--right fas fa-upload"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcMirrorButton"> Mirror from Controller <i style='color: #11a962;' class="fe-icon--right fas fa-sync"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcHuntButton" title="Enterprise Search"> Hunt <i style='color: #11a962;' class="fe-icon--right fas fa-crosshairs"></i></button>
+	</div>
+	<div class="ht-toolbar-right" id="cat-toolbar-right"></div>
+</div>
+{{ htPanelNoHeader.widgetFooter() }}
+
+<div style="margin-top:8px">
+{{ htPanelNoHeader.widgetHeader(panelId="catalogTableContainer", panelDisplay="block") }}
+	<table style='width: 100%;' id='catalogTable' class='hxtool_table'></table>
+{{ htPanelNoHeader.widgetFooter() }}
+</div>
+</div>
+
+<!-- ── Shared: View rule modal ───────────────────────────────────────── -->
 {{ htModal.widgetHeader("View rule", modalId="ruleViewPopup", modalSize="large") }}
 {{ htModal.widgetMiddle() }}
 	<button class="fe-btn fe-btn--md fe-btn--secondary" id="ruleViewDismiss" aria-label="Dismiss"><span> Dismiss </span></button>
 {{ htModal.widgetFooter() }}
 
+<!-- ── Server Rules: Import modal ────────────────────────────────────── -->
 {{ htModal.widgetHeader("Import rule(s)", modalId="ruleImportPopup", modalSize="medium") }}
 	<h4 class='hxtool_typography_h3'>Rule category</h4>
 	<div id='categoryContainer'></div>
@@ -281,6 +1326,38 @@
 {{ htModal.widgetMiddle() }}
 	<button class="fe-btn fe-btn--md fe-btn--secondary" id="ruleImportCancel" aria-label="Cancel"><span> Cancel </span></button>
 	<button class="fe-btn fe-btn--md fe-btn--primary" id="ruleImportSubmit" aria-label="Submit"><span> Submit </span></button>
+{{ htModal.widgetFooter() }}
+
+<!-- ── Local Catalog: Import modal ───────────────────────────────────── -->
+{{ htModal.widgetHeader("Import rule(s) into Local Catalog", modalId="catalogImportPopup", modalSize="medium") }}
+	<h4 class='hxtool_typography_h3'>Rule file(s)</h4>
+	<input class="fe-btn fe-btn--sm fe-btn--primary active" style='background: transparent;' type='file' id='catalogImportFile' name='catalogImportFile' multiple>
+	<br />
+	<span class="fe-input-hint-text">HXTool rule (.rule / .zip) and OpenIOC 1.1 format only!</span>
+{{ htModal.widgetMiddle() }}
+	<button class="fe-btn fe-btn--md fe-btn--secondary" id="catalogImportCancel" aria-label="Cancel"><span> Cancel </span></button>
+	<button class="fe-btn fe-btn--md fe-btn--primary" id="catalogImportSubmit" aria-label="Submit"><span> Submit </span></button>
+{{ htModal.widgetFooter() }}
+
+<!-- ── Local Catalog: Hunt modal ─────────────────────────────────────── -->
+{{ htModal.widgetHeader("Hunt — Enterprise Search", modalId="lcHuntPopup", modalOverflow="true") }}
+	<h3 class='hxtool_typography_h3'>Searches to create</h3>
+	<div id="lcHuntNameList" style="margin-bottom:12px; font-size:13px; color:rgba(255,255,255,0.7);"></div>
+	<h3 class='hxtool_typography_h3 hxtool_typography_underline'>Hostset</h3>
+	<div class='hxtool_panel_wrapper'>
+		<div class='fe-dropdown'>
+			<button type="button" id="lcHuntHostset" data-id="false" class="fe-btn fe-btn--sm fe-btn--hxtool-main-dropdown"> select a hostset <i class="fe-icon--right fas fa-chevron-up"></i></button>
+			<div class="fe-dropdown__list-container">
+				<ul class="fe-dropdown__list fe-list" id="lcHuntHostsetList"></ul>
+			</div>
+		</div>
+		<br>
+		<span class="fe-input-hint-text">Select the target host set</span><br>
+	</div>
+	{{ htSchedule.widgetHeader() }}
+{{ htModal.widgetMiddle() }}
+	<button class="fe-btn fe-btn--md fe-btn--secondary" id="lcHuntCancel" aria-label="Cancel"><span> Cancel </span></button>
+	<button class="fe-btn fe-btn--md fe-btn--primary" id="lcHuntSubmit" aria-label="Submit"><span> Hunt </span></button>
 {{ htModal.widgetFooter() }}
 
 {% endblock %}

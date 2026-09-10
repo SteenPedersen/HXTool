@@ -6,13 +6,129 @@
 <script>
 	$(document).ready(function() {
 
+		var myid = getQueryParam('id');
+
 		$("#goBack").click(function(){
 			location.href = "/search";
 		});
 
-		myid = getQueryParam('id');
+		// ── Search metadata header ────────────────────────────────────────────
+		$.getJSON('/api/v1/enterprise_search/detail?id=' + myid, function(d) {
+			if (d.error) {
+				$("#searchTitle").text("Search #" + myid);
+				return;
+			}
+			$("#searchTitle").text(d.displayname || ("Search #" + myid));
+			var stateColor = d.state === 'COMPLETE' ? '#4caf50' : (d.state === 'RUNNING' ? '#0fb8dc' : '#8ab4c4');
+			$("#searchMeta").html(
+				"<span style='color:" + stateColor + "; font-weight:bold;'>" + d.state + "</span>" +
+				" &bull; Host Set: " + $("<div>").text(d.host_set).html() +
+				" &bull; Created by: " + $("<div>").text(d.create_actor).html() +
+				(d.create_time ? " &bull; " + datatables_Timestamp(d.create_time) : "") +
+				(d.update_time ? " &bull; Updated: " + datatables_Timestamp(d.update_time) : "")
+			);
+			var matched    = d.matched    || 0;
+			var not_matched = d.not_matched || 0;
+			var pending    = d.pending    || 0;
+			var errcount   = d.error      || 0;
+			var total      = d.hosts      || 0;
+			$("#searchStats").html(
+				"<span style='color:#4caf50; font-weight:bold;'>&#10003; " + matched + " matched</span>" +
+				"&nbsp;&bull;&nbsp;<span style='color:#8ab4c4;'>" + not_matched + " not matched</span>" +
+				(pending  > 0 ? "&nbsp;&bull;&nbsp;<span style='color:#f5a623;'>" + pending  + " pending</span>" : "") +
+				(errcount > 0 ? "&nbsp;&bull;&nbsp;<span style='color:#ea475b;'>" + errcount + " error</span>"   : "") +
+				"&nbsp;&bull;&nbsp;" + total + " total"
+			);
 
+			// ── Conditions panel ──────────────────────────────────────────────
+			var conds = d.conditions || [];
+			if (conds.length === 0) {
+				$("#conditionsBody").html("<span style='color:rgba(255,255,255,0.35); font-size:12px;'>Indicator content is not returned by the HX API for this search.</span>");
+			} else {
+				var th = "<thead><tr>" +
+					"<th style='text-align:left; padding:5px 12px 5px 8px; color:rgba(255,255,255,0.45); font-weight:normal; border-bottom:2px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06);'>Token</th>" +
+					"<th style='text-align:left; padding:5px 12px; color:rgba(255,255,255,0.45); font-weight:normal; border-bottom:2px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06);'>Operator</th>" +
+					"<th style='text-align:left; padding:5px 12px; color:rgba(255,255,255,0.45); font-weight:normal; border-bottom:2px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06);'>Value</th>" +
+					"<th style='text-align:left; padding:5px 12px; color:rgba(255,255,255,0.45); font-weight:normal; border-bottom:2px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06);'>Type</th>" +
+					"</tr></thead>";
+				var tb = "<tbody>";
+				for (var i = 0; i < conds.length; i++) {
+					var c = conds[i];
+					var stripe = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.10)';
+					var negLabel = c.negate
+						? "<span style='color:#ea475b; font-size:11px; margin-left:4px;'>NOT</span>"
+						: "";
+					var op = c.condition + negLabel;
+					tb += "<tr>" +
+						"<td style='padding:5px 12px 5px 8px; font-family:monospace; font-size:12px; color:#6cb8f0; background:" + stripe + ";'>" + $("<div>").text(c.token).html() + "</td>" +
+						"<td style='padding:5px 12px; font-size:12px; color:rgba(255,255,255,0.7); background:" + stripe + ";'>" + op + "</td>" +
+						"<td style='padding:5px 12px; font-family:monospace; font-size:12px; color:#4caf50; background:" + stripe + ";'>" + $("<div>").text(c.value).html() + "</td>" +
+						"<td style='padding:5px 12px; font-size:11px; color:rgba(255,255,255,0.4); background:" + stripe + ";'>" + $("<div>").text(c.type).html() + "</td>" +
+						"</tr>";
+				}
+				tb += "</tbody>";
+				$("#conditionsBody").html(
+					"<div style='overflow-x:auto;'><table style='border-collapse:collapse; width:100%; white-space:nowrap;'>" + th + tb + "</table></div>"
+				);
+			}
+		});
+
+		// ── All hosts DataTable ───────────────────────────────────────────────
+		var hostsTable = $('#hostsTable').DataTable({
+			"ajax": "/api/v1/datatable_es_hosts?id=" + myid,
+			"paging":        true,
+			"ordering":      true,
+			"order":         [[1, "asc"]],
+			"info":          false,
+			"searching":     true,
+			"pageLength":    25,
+			"lengthChange":  false,
+			"processing":    false,
+			"dom": '<"hxtool_datatables_buttons"B>frtip',
+			"buttons": [
+				{ extend: "copy",  className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
+				{ extend: "csv",   className: "fe-btn", "text": "csv<i class='fe-icon--right fas fa-file'></i>" },
+				{ extend: "excel", className: "fe-btn", "text": "excel<i class='fe-icon--right fas fa-file-excel'></i>" }
+			],
+			"columns": [
+				{ "title": "Endpoint",  "data": "hostname" },
+				{ "title": "Result",    "data": "search_state" }
+			],
+			"columnDefs": [
+				{
+					"targets": 0,
+					render: function(data, type, row) {
+						if (type !== 'display') return data;
+						return datatables_parseHostlink(data);
+					}
+				},
+				{
+					"targets": 1,
+					render: function(data, type, row) {
+						if (type !== 'display') return data;
+						var colors = {
+							'MATCHED':     '#4caf50',
+							'NOT_MATCHED': '#8ab4c4',
+							'PENDING':     '#f5a623',
+							'ERROR':       '#ea475b',
+							'SKIPPED':     '#6b7280',
+							'CANCELLED':   '#6b7280'
+						};
+						var color = colors[data] || '#8ab4c4';
+						return "<span style='color:" + color + "; font-weight:bold;'>" + (data || 'N/A').replace('_', ' ') + "</span>";
+					}
+				}
+			]
+		});
+		$('div.dataTables_filter input').addClass("fe-input");
+
+		// ── Matched results (evidence) ────────────────────────────────────────
 		$.getJSON('/api/v1/datatable_es_result_types?id=' + myid, function(mytypes) {
+			if ($.isEmptyObject(mytypes)) {
+				return;
+			}
+
+			$("#matchedResultsHeader").show();
 
 			for (var currtype in mytypes) {
 				var mycols = [];
@@ -20,58 +136,75 @@
 					mycols.push({ "title": mytypes[currtype][i].replace(/_/g," "), "data": mytypes[currtype][i] });
 				}
 
-				$("#tableContainer").append("<div style='margin-top: 12px;' id='ph_" + currtype.replace(/ /g,"_") + "'></div>");
+				var safetype = currtype.replace(/ /g,"_");
+				$("#matchedResultsContainer").append("<div style='margin-top: 12px;' id='ph_" + safetype + "'></div>");
 
-				$("#ph_" + currtype.replace(/ /g,"_")).append("<div class='fe-panel'>");
-				$("#ph_" + currtype.replace(/ /g,"_")).find(".fe-panel").append("<div class='fe-panel-header fe-panel-header--no-background'></div>");
-				$("#ph_" + currtype.replace(/ /g,"_")).find(".fe-panel-header").append("<div class='fe-label fe-label--background'><i style='color: #11a962;' class='fe-icon--left fas fa-chart-bar'></i>" + currtype + "</div>");
-				$("#ph_" + currtype.replace(/ /g,"_")).append("<div class='fe-panel__body'></div>");
-
-				$("#ph_" + currtype.replace(/ /g,"_")).find(".fe-panel__body").append("<table class='hxtool_table' id='esTableResults_" + currtype.replace(/ /g,"_") + "' style='width: 100%;'></table>");
+				$("#ph_" + safetype).append("<div class='fe-panel'>");
+				$("#ph_" + safetype).find(".fe-panel").append("<div class='fe-panel-header fe-panel-header--no-background'></div>");
+				$("#ph_" + safetype).find(".fe-panel-header").append("<div class='fe-label fe-label--background'><i style='color: #11a962;' class='fe-icon--left fas fa-chart-bar'></i>" + currtype + "</div>");
+				$("#ph_" + safetype).append("<div class='fe-panel__body'></div>");
+				$("#ph_" + safetype).find(".fe-panel__body").append("<table class='hxtool_table' id='esTableResults_" + safetype + "' style='width: 100%;'></table>");
 
 				$.fn.dataTable.ext.errMode = 'none';
-				$('#esTableResults_' + currtype.replace(/ /g,"_")).DataTable( {
+				$('#esTableResults_' + safetype).DataTable({
 					"ajax": "/api/v1/datatable_es_result?id=" + myid + "&type=" + currtype,
 					"columns": mycols,
-					"paging":   true,
-					"ordering": true,
-					"info":     false,
-					"scrollX": true,
-					"searching": true,
-					"pageLength": 25,
-					"lengthChange": false,
-					"processing": false,
+					"paging":        true,
+					"ordering":      true,
+					"info":          false,
+					"scrollX":       true,
+					"searching":     true,
+					"pageLength":    25,
+					"lengthChange":  false,
+					"processing":    false,
 					"dom": '<"hxtool_datatables_buttons"B>frtip',
 					"buttons": [
-						{ extend: "copy", className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
-						{ extend: "csv", className: "fe-btn", "text": "csv<i class='fe-icon--right fas fa-file'></i>" },
+						{ extend: "copy",  className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
+						{ extend: "csv",   className: "fe-btn", "text": "csv<i class='fe-icon--right fas fa-file'></i>" },
 						{ extend: "excel", className: "fe-btn", "text": "excel<i class='fe-icon--right fas fa-file-excel'></i>" }
 					],
 					"colReorder": true,
 					"columnDefs": [
 						{
-						 "targets": 0,
-						 render: function ( data, type, row, meta ) {
-						 	return(datatables_parseHostlink(data));
-						 }
-						}					
+							"targets": 0,
+							render: function(data, type, row, meta) {
+								return datatables_parseHostlink(data);
+							}
+						}
 					]
 				});
 				$('div.dataTables_filter input').addClass("fe-input");
 			}
-
 		});
 
 	});
-
 </script>
 
 {{ htPanelNoHeader.widgetHeader(panelDisplay="inline-block") }}
 	<button id="goBack" class="fe-btn fe-btn--md fe-btn--primary fe-btn--hxtool-main-master"> back <i style='color: #11a962;' class="fe-icon--right fas fa-arrow-left"></i></button>
 {{ htPanelNoHeader.widgetFooter() }}
 
+{{ htPanel.widgetHeader("", panelIcon="fa-search") }}
+	<h3 id="searchTitle" class="hxtool_typography_h3" style="margin-bottom: 6px;">Loading&hellip;</h3>
+	<div id="searchMeta" style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;"></div>
+	<div id="searchStats" style="font-size: 13px;"></div>
+{{ htPanel.widgetFooter() }}
 
-<div id='tableContainer'></div>
+{{ htPanel.widgetHeader("Search Criteria", panelIcon="fa-filter") }}
+	<div id="conditionsBody" style="font-size: 13px;">
+		<span style="color:rgba(255,255,255,0.35); font-size:12px;">Loading&hellip;</span>
+	</div>
+{{ htPanel.widgetFooter() }}
 
+{{ htPanel.widgetHeader("Endpoints", panelIcon="fa-desktop") }}
+	<table class='hxtool_table' id='hostsTable' style='width: 100%;'></table>
+{{ htPanel.widgetFooter() }}
+
+<div id="matchedResultsHeader" style="display: none; margin-top: 16px;">
+	<div class="fe-label fe-label--background">
+		<i style='color: #11a962;' class='fe-icon--left fas fa-crosshairs'></i>Evidence from matched endpoints
+	</div>
+</div>
+<div id="matchedResultsContainer"></div>
 
 {% endblock %}

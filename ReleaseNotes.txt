@@ -1,0 +1,127 @@
+HXTool Release Notes
+====================
+Version 26.08-pre
+-----------------
+
+MANAGE RULES — IOC INDICATOR IMPROVEMENTS
+------------------------------------------
+
+View Rule
+  - The View popup now displays the indicator name, description, category, and
+    platforms at the top, even when reading conditions is blocked by the HX API.
+  - When conditions cannot be loaded (HX error code 1101), the error popup now
+    shows the full HX REST API endpoint URL, the HTTP status code, and the exact
+    HX error code and message instead of raw JSON or a generic error.
+
+Edit Rule
+  - Fixed a crash (UnboundLocalError / HTTP 500) that occurred when opening any
+    rule for editing.
+  - The edit form now opens correctly, pre-populated with the rule name,
+    description, category, and platform from the data already available in the
+    indicators table — without making an additional API call that was blocked for
+    many user roles.
+  - When rule conditions cannot be loaded due to HX role restrictions (error
+    code 1101), a clear warning banner is shown above the submit button explaining
+    that conditions are empty and that submitting will overwrite them.
+  - The HX REST API endpoint used for fetching indicator metadata is now shown in
+    full (https://host:port/path) in all error messages.
+
+Clone Rule
+  - Fixed: Clone did not open the edit form. It now correctly opens a pre-filled
+    form ready for creating a new rule based on the selected indicator.
+  - Same fixes as Edit apply (correct indicator metadata, clear error messaging).
+
+Create / Submit Rule
+  - When rule creation fails, the error message now includes the full HX API
+    endpoint URL, the HTTP status code returned by HX, and the exact HX error
+    code and message. Previously the error was a generic "failed to create
+    indicator" with no detail.
+
+Conditions API
+  - Added a new internal API endpoint (/api/v1/indicators/get/conditions) to
+    fetch presence and execution conditions for a given indicator.
+  - When fetching conditions fails, the response includes the full HX API URL,
+    HTTP status, and HX error details so failures can be diagnosed without
+    inspecting server logs.
+  - Fixed a bug where the UnboundLocalError caused the indicator category edit
+    policies endpoint to crash when the HX API returned an error.
+
+
+MANAGE STREAMING RULES
+-----------------------
+  - No functional changes. View, Edit, and Clone continue to work as before.
+
+
+UI / NAVIGATION
+---------------
+
+Font Size Controls
+  - Added A- and A+ buttons to the top navigation bar for decreasing and
+    increasing the content area font size.
+  - The selected font scale is persisted in the browser's localStorage and
+    restored automatically on the next page load (range: 70 % – 150 %,
+    step: 10 %).
+
+Error Handling
+  - Rewrote the global hxtoolActionFail JavaScript handler to parse HX API error
+    responses and display a structured, human-readable error message instead of
+    raw HTTP status text. HX error codes, messages, and details from both
+    presence and execution condition responses are extracted and shown.
+
+Layout / Branding
+  - Added viewport meta tag for correct scaling on high-DPI and mobile displays.
+  - Updated top navigation to show the Trellix® brand name.
+
+
+PYTHON / FRAMEWORK COMPATIBILITY
+---------------------------------
+
+  - Removed all `# -*- coding: utf-8 -*-` source declarations — redundant since
+    Python 3 defaults to UTF-8 and these declarations are a Python 2 artefact.
+  - Replaced `super(ClassName, self).__init__(...)` calls with the Python 3 form
+    `super().__init__(...)` throughout (hxtool_logging.py, hxtool_tinydb.py).
+  - Replaced all `str.format()` string formatting with f-strings across the
+    entire codebase (hx_lib.py, hxtool.py, hxtool_api.py, hxtool_db.py,
+    hxtool_logging.py, hxtool_mongodb.py, hxtool_scheduler.py,
+    hxtool_session.py, and others).
+  - Replaced bare `except:` clauses with `except Exception:` throughout
+    hxtool_db.py to avoid silently swallowing BaseException subclasses
+    (KeyboardInterrupt, SystemExit) — required by modern Python linting and
+    best-practice guidelines.
+  - Replaced deprecated `logger.warn()` calls with `logger.warning()` in
+    hxtool_scheduler.py (`warn` was removed in Python 3.12).
+  - Replaced deprecated Flask `session_cookie_name` attribute access with
+    `app.config['SESSION_COOKIE_NAME']` required by Flask 2.3+.
+  - Changed startup error messages that previously used `print()` to write to
+    `sys.stderr` instead (hxtool.py, hx_lib.py, hxtool_db.py,
+    hxtool_mongodb.py) so they are not swallowed when stdout is redirected.
+  - Removed redundant parentheses from TinyDB `Query()` expressions throughout
+    hxtool_db.py (e.g. `Query()['field'] == value` instead of
+    `(Query()['field'] == value)`) — the extra parens were harmless but are
+    not idiomatic with modern TinyDB.
+
+
+CODEBASE / INTERNAL
+--------------------
+
+  - Version string updated from 4.8-pre to 26.08-pre.
+  - Added hx_lib.restGetIndicator() — fetches a single indicator by category and
+    URI name without appending pagination parameters that the single-item
+    endpoint rejects.
+  - Added _hx_error_detail() helper in hxtool_api.py to extract a human-readable
+    error string from any HX API error response.
+  - All HX API error messages now include the complete request URL
+    (https://host:port/path) to aid diagnosis without server log access.
+
+
+KNOWN LIMITATIONS
+-----------------
+
+  - Reading indicator conditions and creating/editing indicators in the Custom
+    (unrestricted) category requires the HX REST API "Custom IOC" role to be
+    granted on the HX server for the user's account. The HXTool Admin role does
+    not grant this — it must be configured in HX platform user management.
+    Affected operations show the specific HX error code and full API endpoint in
+    the error message to aid escalation to an HX administrator.
+  - Mandiant Intel and other restricted indicator categories are read-only by
+    design in the HX REST API regardless of user role.

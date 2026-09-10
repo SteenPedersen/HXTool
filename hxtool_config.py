@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import json
 import logging
@@ -57,7 +56,7 @@ class hxtool_config:
 		
 		logger.info('Reading configuration file %s', config_file)
 		if path.isfile(config_file):
-			with open(config_file, 'r') as config_file_handle:
+			with open(config_file) as config_file_handle:
 				self._config = json.load(config_file_handle)
 				logger.info('Checking configuration file %s', config_file)
 				if not {'log_handlers', 'network', 'ssl', 'scheduler'} <= set(self._config.keys()):
@@ -88,6 +87,12 @@ class hxtool_config:
 			
 	def get_config(self):
 		return self._config
+
+	def huntSettings(self):
+		hunt = self._config.get('hunt', {})
+		from hxtool_hunt import HUNT_TYPES
+		default_ids = [ht['id'] for ht in HUNT_TYPES]
+		return {'enabled_types': hunt.get('enabled_types', default_ids)}
 			
 	def log_handlers(self):
 		for handler_name in self._config['log_handlers']:

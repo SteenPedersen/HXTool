@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import hxtool_global
 from .task_module import *
@@ -69,10 +68,10 @@ class enterprise_search_task_module(task_module):
 				(ret, response_code, response_data) = hx_api_object.restSubmitSweep(script, hostset_id, ignore_unsupported_items = ignore_unsupported_items, skip_base64 = skip_base64, displayname = displayname)
 				if ret:
 					result['enterprise_search_id'] = response_data['data']['_id']
-					self.parent_task.name = "Enterprise Search ID: {}".format(response_data['data']['_id'])
+					self.parent_task.name = f"Enterprise Search ID: {response_data['data']['_id']}"
 					self.logger.info("Enterprise Search ID: {} successfully submitted.".format(result['enterprise_search_id']))
 				else:
-					self.logger.error("Enterprise Search submission failed. Response code: {}, response data: {}".format(response_code, response_data))
+					self.logger.error(f"Enterprise Search submission failed. Response code: {response_code}, response data: {response_data}")
 			else:
-				self.logger.warn("No task API session for profile: {}".format(self.parent_task.profile_id))	
+				self.logger.warning(f"No task API session for profile: {self.parent_task.profile_id}")	
 		return(ret, result)

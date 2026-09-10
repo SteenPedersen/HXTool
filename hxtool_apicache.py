@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import hxtool_logging
 import hxtool_global
@@ -27,15 +26,15 @@ class hxtool_api_cache:
 					setattr(self, objectType + "_fetcher_interval", intervals[objectType]["fetcher_interval"])
 					setattr(self, objectType + "_objects_per_poll", intervals[objectType]["objects_per_poll"])
 					setattr(self, objectType + "_refresh_interval", intervals[objectType]["refresh_interval"])
-				except:
-					self.logger.error("Missing interval settings for {}, check configuration to enable cache".format(objectType))
+				except KeyError:
+					self.logger.error(f"Missing interval settings for {objectType}, check configuration to enable cache")
 					exit(2)
 
 				my_fetcher_task = hxtool_scheduler_task("System", "Cache fetcher for " + objectType + " profile: " + str(self.profile_id), immutable=True)
 				my_fetcher_task.set_schedule(seconds=intervals[objectType]["fetcher_interval"])
 				my_fetcher_task.add_step(self, "apicache_fetcher", kwargs={"objectType" : objectType } )
 				hxtool_global.hxtool_scheduler.add(my_fetcher_task)
-				self.logger.info("Apicache {} fetcher started for profile: {}.".format(objectType, self.profile_id))
+				self.logger.info(f"Apicache {objectType} fetcher started for profile: {self.profile_id}.")
 
 		stats = {}
 		for k, v in intervals.items():
@@ -88,7 +87,7 @@ class hxtool_api_cache:
 
 		# Show log if we have updates or new records
 		if s_update != 0 or s_add != 0:
-			self.logger.info("{}: [{}] {} records updated, {} records added in {} seconds".format(self.profile_id, objectType, s_update, s_add, (s_end - s_start).total_seconds()))
+			self.logger.info(f"{self.profile_id}: [{objectType}] {s_update} records updated, {s_add} records added in {(s_end - s_start).total_seconds()} seconds")
 
 		return currOffset
 

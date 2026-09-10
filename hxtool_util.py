@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from functools import wraps
 import os
+import sys
 import uuid
 import threading
 import datetime
@@ -14,7 +14,7 @@ import json
 try:
 	from flask import request, session, redirect, url_for
 except ImportError:
-	print("hxtool requires the 'Flask' module, please install it.")
+	sys.stderr.write("hxtool requires the 'Flask' module, please install it.\n")
 	exit(1)
 
 # pycryptodome/pycryptodomex imports
@@ -30,7 +30,7 @@ except (ImportError, ModuleNotFoundError):
 		from Crypto.Hash import HMAC, SHA256
 		from Crypto.Util.Padding import pad, unpad
 	except (ImportError, ModuleNotFoundError):
-		print("hxtool requires the 'pycryptodomex' (preferred) or the 'pycryptodome' module, please install it.")
+		sys.stderr.write("hxtool requires the 'pycryptodomex' (preferred) or the 'pycryptodome' module, please install it.\n")
 		exit(1)
 
 import hxtool_logging
@@ -59,7 +59,7 @@ def valid_session_required(f):
 				session['ht_api_object'] = o.serialize()
 				return ret	
 			else:
-				logger.warn("The HX API token for the current session has expired, redirecting to the login page.")
+				logger.warning("The HX API token for the current session has expired, redirecting to the login page.")
 		return ret
 	return is_session_valid
 	
@@ -112,8 +112,7 @@ Iter over a Requests response object
 and yield the chunk
 """
 def iter_chunk(r, chunk_size = 1024):
-	for chunk in r.iter_content(chunk_size = chunk_size):
-		yield chunk
+	yield from r.iter_content(chunk_size = chunk_size)
 
 def download_directory_base():
 	# TODO: check configuration, if none, return the default
@@ -126,7 +125,7 @@ def combine_app_path(path, *paths):
 		return path
 		
 def get_download_filename(host_name, host_id):
-	return '{0}_{1}.zip'.format(host_name, host_id)
+	return f'{host_name}_{host_id}.zip'
 
 def make_download_directory(hx_host, download_id, job_type=None):
 	download_directory = combine_app_path(download_directory_base(), hx_host, str(download_id))
@@ -135,7 +134,7 @@ def make_download_directory(hx_host, download_id, job_type=None):
 	if not os.path.exists(download_directory):
 		try:
 			os.makedirs(download_directory)
-		except:
+		except OSError:
 			if not os.path.exists(download_directory): raise
 			
 	return download_directory
@@ -150,7 +149,7 @@ def format_activity_log(**kwargs):
 	return(mystring)
 				
 def set_time_macros(s):
-	(s, n) = re.subn('--\#\{(now|\-(\d{1,5})(m|h))\}--', _time_replace, s, re.I) 
+	(s, n) = re.subn(r'--\#\{(now|\-(\d{1,5})(m|h))\}--', _time_replace, s, re.I) 
 	return s, n > 0
 	
 def _time_replace(m):
@@ -168,10 +167,10 @@ def _time_replace(m):
 	return None
 
 def pretty_exceptions(e):
-	return "{} in {}".format(e, traceback.format_exc())
+	return f"{e} in {traceback.format_exc()}"
 
 	
-class TemporaryFileLock(object):
+class TemporaryFileLock:
 	def __init__(self, file_path, file_name = 'lock_file'):
 		self.file_name = os.path.join(file_path, file_name)
 		self._stop_event = threading.Event()
@@ -236,7 +235,7 @@ def js_path(json_string, path, not_found="Not found!"):
 				path_part = int(path_part[1:])
 			json_string = json_string[path_part]
 		return json_string
-	except:
+	except (KeyError, IndexError, TypeError):
 		return not_found
 		
 def validate_hashes(hash_list, hash_type="MD5"):
@@ -251,6 +250,6 @@ def validate_hashes(hash_list, hash_type="MD5"):
 	split_hashes = hash_list.splitlines()
 	for h in split_hashes:
 		if not re.match("^[A-F0-9]{" + hash_length + "}$", h, re.I):
-			return False, "{} is an invalid {} hash.".format(h, hash_type)
+			return False, f"{h} is an invalid {hash_type} hash."
 
 	return True, split_hashes

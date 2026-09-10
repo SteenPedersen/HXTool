@@ -11,9 +11,30 @@
 		var fullDate = new Date()
 		var currentDate = fullDate.toISOString().substr(0, 10);
 
+		function setEsStatus(html) {
+			$('#esHeaderStatus').html(html);
+			$('#esFooterStatus').html(html);
+		}
+
+		setEsStatus('<i class="fas fa-spinner fa-spin"></i>&nbsp; Loading&hellip;');
+
 		$.fn.dataTable.ext.errMode = 'none';
 		var es_datatable = $('#esTable').DataTable( {
-			"ajax": "/api/v1/datatable_es",
+			"ajax": {
+				url: '/api/v1/datatable_es',
+				dataSrc: function(json) {
+					if (json.error) {
+						setEsStatus('<span style="color:#ea475b"><i class="fas fa-exclamation-triangle"></i>&nbsp;' + json.error + '</span>');
+						return [];
+					}
+					return json.data || [];
+				},
+				error: function(xhr) {
+					var msg = 'Failed to load searches.';
+					if (xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
+					setEsStatus('<span style="color:#ea475b"><i class="fas fa-exclamation-triangle"></i>&nbsp;' + msg + '</span>');
+				}
+			},
 			"paging":   false,
 			"ordering": false,
 			"info":     false,
@@ -55,6 +76,10 @@
 				$("div[id^='crate_']").each(function() {
 					$(this).progress();
 				});
+				var count = this.api().rows().count();
+				setEsStatus(count === 0
+					? '<span style="color:#8ab4c4">No searches found.</span>'
+					: '<span style="color:#8ab4c4">' + count + ' search' + (count === 1 ? '' : 'es') + '</span>');
 			},
 			"columnDefs": [	
 				{
@@ -101,6 +126,7 @@
 				 "targets": 1,
 				 "width": "50px",
 				 render: function ( data, type, row, meta ) {
+				 	if (type !== 'display') return data;
 				 	return (datatables_parseAcquisitionState(data));
 				 }
 				},
@@ -147,10 +173,15 @@
 		$('div.dataTables_filter input').addClass("fe-input");
 
 		setInterval( function () {
+			setEsStatus('<i class="fas fa-spinner fa-spin"></i>&nbsp; Refreshing&hellip;');
 			es_datatable.ajax.reload(function() {
 				$("div[id^='crate_']").each(function() {
 					$(this).progressNoAnimate();
 				});
+				var count = es_datatable.rows().count();
+				setEsStatus(count === 0
+					? '<span style="color:#8ab4c4">No searches found.</span>'
+					: '<span style="color:#8ab4c4">' + count + ' search' + (count === 1 ? '' : 'es') + '</span>');
 			});
 		}, 60000 );
 
@@ -413,9 +444,16 @@
 	{{ htModal.widgetFooter() }}
 
 	<!-- TABLE -->
-	{{ htPanel.widgetHeader("Enterprise searches", panelIcon="fa-table") }}
-		<table class='hxtool_table hxtool_table_header_es' id='esTable' style='width: 100%;'></table>
-	{{ htPanel.widgetFooter() }}
+	<div class="fe-panel">
+		<div class="fe-panel__header" style="display: flex; align-items: center;">
+			<div class="fe-label fe-label--background"><i class='fe-icon--left fas fa-table'></i>Enterprise Searches</div>
+			<div id="esHeaderStatus" style="font-size:12px; margin-left:12px; color:#8ab4c4;"></div>
+		</div>
+		<div class="fe-panel__body">
+			<table class='hxtool_table hxtool_table_header_es' id='esTable' style='width: 100%;'></table>
+			<div id="esFooterStatus" style="padding: 6px 2px; color: #8ab4c4; font-size: 12px; min-height: 22px;"></div>
+		</div>
+	</div>
 
 
 {% endblock %}

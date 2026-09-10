@@ -13,7 +13,7 @@
 
 
 .dt-button {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
   line-height: 100%;
   text-transform: uppercase;
@@ -47,7 +47,7 @@
   margin-top: -47px;
   margin-right: 218px;
   font-family: 'Open Sans'
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .dataTables_filter label {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .dataTables_paginate {
@@ -72,7 +72,7 @@
 
 .paginate_button {
   line-height: 100%;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: bold;
   text-transform: uppercase;
   background: rgba(255, 255, 255, 0.2) !important;

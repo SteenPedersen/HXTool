@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from werkzeug.datastructures import CallbackDict
 from flask.sessions import SessionInterface, SessionMixin
@@ -72,10 +71,10 @@ class hxtool_session_interface(SessionInterface):
 				session_record = hxtool_global.hxtool_db.sessionGet(session_id)
 				if session_record is not None:
 					session.load(session_id, session_record)
-					logger.debug("We have an existing database session with id: {0}".format(session.id))
+					logger.debug(f"We have an existing database session with id: {session.id}")
 			else:
 				session = cached_session
-				logger.debug("We have an existing cached session with id: {0}".format(session.id))
+				logger.debug(f"We have an existing cached session with id: {session.id}")
 	
 		
 		return session
@@ -95,10 +94,10 @@ class hxtool_session_interface(SessionInterface):
 		if session.new:
 			session.create()
 			hxtool_global.hxtool_db.sessionCreate(session.id)
-			logger.debug("Created a new session with id: {0}".format(session.id))
+			logger.debug(f"Created a new session with id: {session.id}")
 			session.new = False
 			
-		logger.debug("Saving session with id: {0}".format(session.id))
+		logger.debug(f"Saving session with id: {session.id}")
 		hxtool_global.hxtool_db.sessionUpdate(session.id, session)
 		session.modified = False
 		
@@ -110,7 +109,7 @@ class hxtool_session_interface(SessionInterface):
 		response.set_cookie(app.config['SESSION_COOKIE_NAME'], session.id, expires=self.get_expiration_time(app, session), path=cookie_path, httponly=http_only, secure=secure, domain=cookie_domain)	
 
 	def delete_session(self, app, session_id):
-		logger.debug("Deleting session with id: {0}".format(session_id))
+		logger.debug(f"Deleting session with id: {session_id}")
 		hxtool_global.hxtool_db.sessionDelete(session_id)
 		if session_id in self.session_cache:
 			del self.session_cache[session_id]
