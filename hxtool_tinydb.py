@@ -539,6 +539,33 @@ class hxtool_tinydb(hxtool_db):
 		with self._lock:
 			return self._db.table('local_catalog').remove(tinydb.Query()['local_catalog_id'] == local_catalog_id)
 
+	def lcGroupsList(self):
+		with self._lock:
+			return sorted([r['name'] for r in self._db.table('lc_groups').all()])
+
+	def lcGroupCreate(self, name):
+		with self._lock:
+			q = tinydb.Query()
+			if not self._db.table('lc_groups').search(q.name == name):
+				self._db.table('lc_groups').insert({'name': name})
+			return True
+
+	def lcGroupDelete(self, name):
+		if name == 'Root':
+			return False
+		with self._lock:
+			q = tinydb.Query()
+			self._db.table('local_catalog').update({'category': 'Root'}, q.category == name)
+			self._db.table('lc_groups').remove(q.name == name)
+			return True
+
+	def localCatalogUpdateGroup(self, local_catalog_id, group):
+		with self._lock:
+			return self._db.table('local_catalog').update(
+				{'category': group, 'update_timestamp': HXAPI.dt_to_str(datetime.datetime.utcnow())},
+				tinydb.Query()['local_catalog_id'] == local_catalog_id
+			)
+
 	def taskCreate(self, serialized_task):
 		with self._lock:
 			return self._db.table('tasks').insert(serialized_task)

@@ -1003,19 +1003,24 @@ class HXAPI:
 		return(ret, response_code, response_data)
 
 
-	def restSubmitSweep(self, indicator, host_set, ignore_unsupported_items = False, skip_base64 = False, displayname = False):
-		
+	def restSubmitSweep(self, indicator, host_set, ignore_unsupported_items = False, skip_base64 = False, displayname = False, exhaustive = False):
+
 		if not skip_base64:
 			indicator = HXAPI.b64(indicator)
-		
+
 		data = {
-			'indicator' : indicator, 
+			'indicator' : indicator,
 			'host_set' : {'_id' : int(host_set)}
 		}
-		
+
 		if displayname:
 			data['displayname'] = displayname
-			
+
+		# Quick sweeps only scan each agent's live event buffer (recent activity). An
+		# exhaustive search scans the full historical audit data, at higher cost.
+		if exhaustive:
+			data['exhaustive'] = True
+
 		params = None
 		if self.hx_version >= [4,5,0]:
 			params = {'ignore_unsupported_items' : str(ignore_unsupported_items).lower()}
@@ -1025,13 +1030,15 @@ class HXAPI:
 		
 		return(ret, response_code, response_data)
 
-	def restSubmitQuerySearch(self, query, host_set, displayname=None):
+	def restSubmitQuerySearch(self, query, host_set, displayname=None, exhaustive=False):
 		data = {
 			'host_set': {'_id': int(host_set)},
 			'query': query,
 		}
 		if displayname:
 			data['displayname'] = displayname
+		if exhaustive:
+			data['exhaustive'] = True
 		request = self.build_request(self.build_api_route('searches'), method='POST', data=json.dumps(data))
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		return (ret, response_code, response_data)

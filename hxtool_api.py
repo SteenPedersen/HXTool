@@ -23,7 +23,7 @@ from hxtool_scheduler import *
 from hxtool_scheduler_task import *
 from hxtool_task_modules import *
 from hx_openioc import openioc_to_hxioc
-from hxtool_hunt import HUNT_TYPES, detect_ioc_type, ioc_group_to_query_array
+from hxtool_hunt import HUNT_TYPES, detect_ioc_type, ioc_group_to_query_array, SEARCHABLE_FIELDS, HUNT_OPERATORS, OPERATORS_BY_TYPE, FIELD_TYPES, load_field_mappings, save_field_mappings, get_query_fields
 
 ht_api = Blueprint('ht_api', __name__, template_folder='templates')
 logger = hxtool_logging.getLogger(__name__)
@@ -388,7 +388,7 @@ def hxtool_api_enterprise_search_new_db(hx_api_object):
 	#   <Context document="FileItem" search="FileItem/FullPath" type="endpoint" />
 
 	event_item_script = re.sub(
-	    r'<Context\s+document="(?!eventItem).+"\s+search="(?!eventItem/)(?P<search>.+Event.+)"\s+type="(?!mir).+"\s+/>',
+	    r'<Context\s+document="(?!eventItem).+?"\s+search="(?!eventItem/)(?P<search>.+?Event.+?)"\s+type="(?!mir).+?"\s+/>',
 	    r'<Context document="eventItem" search="eventItem/\g<search>" type="event" />',
 	    HXAPI.b64(ioc_script['ioc'], True).decode('utf-8'),
 	    flags=re.IGNORECASE)
@@ -436,7 +436,7 @@ def hxtool_api_enterprise_search_new_file(hx_api_object):
 
 	# see comment in hxtool_api_enterprise_search_new_db above
 	event_item_script = re.sub(
-		r'<Context\s+document="(?!eventItem).+"\s+search="(?!eventItem/)(?P<search>.+Event.+)"\s+type="(?!mir).+"\s+/>',
+		r'<Context\s+document="(?!eventItem).+?"\s+search="(?!eventItem/)(?P<search>.+?Event.+?)"\s+type="(?!mir).+?"\s+/>',
 		r'<Context document="eventItem" search="eventItem/\g<search>" type="event" />',
 		ioc_script.decode('utf-8'),
 		flags=re.IGNORECASE)
@@ -472,6 +472,34 @@ _HUNT_TYPE_MAP = {
 	'text': 'string', 'integer': 'integer', 'boolean': 'bool',
 	'datetime': 'date', 'ip': 'IP',
 }
+# Fields present in the HX event buffer but NOT indexed by Enterprise Search.
+# Map them to the closest indexed equivalent so searches are not silently dropped.
+_TOKEN_ALIAS_MAP = {
+	'processEvent/process':            'processEvent/processPath',
+	'processEvent/parentProcess':      'processEvent/parentProcessPath',
+	'fileWriteEvent/process':          'fileWriteEvent/processPath',
+	'regKeyEvent/process':             'regKeyEvent/processPath',
+	'dnsLookupEvent/process':          'dnsLookupEvent/processPath',
+	'ipv4NetworkEvent/process':        'ipv4NetworkEvent/processPath',
+	'urlMonitorEvent/process':         'urlMonitorEvent/processPath',
+}
+
+def _cset_to_query_array(cset):
+	"""Convert one AND-condition group to an HX enterprise search query array.
+	Each condition becomes {"field": "eventItem/<token>", "operator": ..., "value": ...}.
+	"""
+	query = []
+	for test in cset:
+		token = test.get('token', '')
+		if not token:
+			continue
+		query.append({
+			'field': 'eventItem/' + token,
+			'operator': _HUNT_OPERATOR_MAP.get(test.get('operator', 'equal'), test.get('operator', 'equal')),
+			'value': str(test.get('value', '')),
+		})
+	return query or None
+
 
 def _conditions_to_openioc_xml(presence, execution, name=''):
 	import xml.etree.ElementTree as ET
@@ -482,69 +510,251 @@ def _conditions_to_openioc_xml(presence, execution, name=''):
 	root = ET.Element('OpenIOC', {'id': str(uuid4()), 'xmlns': 'http://openioc.org/schemas/OpenIOC_1.1'})
 	meta = ET.SubElement(root, 'metadata')
 	ET.SubElement(meta, 'short_description').text = name
+	from collections import OrderedDict
+
+	def _add_item(container, test, token):
+		doc = token.split('/', 1)[0]
+		ctx_type = 'event' if 'Event' in doc else 'endpoint'
+		item = ET.SubElement(container, 'IndicatorItem', {
+			'id': str(uuid4()),
+			'condition': _HUNT_OPERATOR_MAP.get(test.get('operator', 'equal'), test.get('operator', 'equal')),
+			'preserve-case': 'true' if test.get('preservecase') else 'false',
+			'negate': 'true' if test.get('negate') else 'false',
+		})
+		ET.SubElement(item, 'Context', {'document': doc, 'search': token, 'type': ctx_type})
+		ET.SubElement(item, 'Content', {'type': _HUNT_TYPE_MAP.get(test.get('type', 'text'), 'string')}).text = str(test.get('value', ''))
+
 	top = ET.SubElement(ET.SubElement(root, 'definition'), 'Indicator', {'id': str(uuid4()), 'operator': 'OR'})
 	for cset in all_csets:
 		if not cset:
 			continue
-		parent = ET.SubElement(top, 'Indicator', {'id': str(uuid4()), 'operator': 'AND'}) if len(cset) > 1 else top
+		# Tests within one condition are AND'd across DIFFERENT fields, but multiple values
+		# for the SAME field are OR'd — a field can't match two different values on one event,
+		# so AND-ing them (the naive mapping) would never match anything.
+		by_field = OrderedDict()
 		for test in cset:
-			token = test.get('token', '')
-			doc = token.split('/', 1)[0]
-			ctx_type = 'event' if 'Event' in doc else 'endpoint'
-			item = ET.SubElement(parent, 'IndicatorItem', {
-				'id': str(uuid4()),
-				'condition': _HUNT_OPERATOR_MAP.get(test.get('operator', 'equal'), test.get('operator', 'equal')),
-				'preserve-case': 'true' if test.get('preservecase') else 'false',
-				'negate': 'true' if test.get('negate') else 'false',
-			})
-			ET.SubElement(item, 'Context', {'document': doc, 'search': token, 'type': ctx_type})
-			ET.SubElement(item, 'Content', {'type': _HUNT_TYPE_MAP.get(test.get('type', 'text'), 'string')}).text = str(test.get('value', ''))
+			token = _TOKEN_ALIAS_MAP.get(test.get('token', ''), test.get('token', ''))
+			by_field.setdefault(token, []).append(test)
+
+		if len(by_field) == 1:
+			# Single field in this condition: its value(s) OR directly under the top OR.
+			token, tests = next(iter(by_field.items()))
+			for test in tests:
+				_add_item(top, test, token)
+		else:
+			# Multiple fields: AND across fields, OR within each field's values.
+			parent = ET.SubElement(top, 'Indicator', {'id': str(uuid4()), 'operator': 'AND'})
+			for token, tests in by_field.items():
+				container = parent if len(tests) == 1 else ET.SubElement(parent, 'Indicator', {'id': str(uuid4()), 'operator': 'OR'})
+				for test in tests:
+					_add_item(container, test, token)
 	return '<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(root, encoding='unicode')
+
+
+# Map local-catalog rule tokens (real-time event schema) to HX Enterprise Search
+# "displayable" field names. The HX console field picker (and restSubmitQuerySearch)
+# search indexed audit data via these display fields — which is what actually returns
+# results, unlike the OpenIOC eventItem sweep. Tokens not listed are skipped (reported).
+_TOKEN_TO_SEARCH_FIELD = {
+	'processEvent/processPath':        'Process Name',
+	'processEvent/process':            'Process Name',
+	'processEvent/processCmdLine':     'Process Arguments',
+	'processEvent/parentProcess':      'Parent Process Name',
+	'processEvent/parentProcessPath':  'Parent Process Path',
+	'processEvent/username':           'Username',
+	'processEvent/md5':                'File MD5 Hash',
+	'fileWriteEvent/fileName':         'File Name',
+	'fileWriteEvent/fullPath':         'File Full Path',
+	'fileWriteEvent/filePath':         'File Full Path',
+	'fileWriteEvent/md5':              'File MD5 Hash',
+	'fileWriteEvent/sha1':             'File SHA1 Hash',
+	'fileWriteEvent/sha256':           'File SHA256 Hash',
+	'fileWriteEvent/username':         'Username',
+	'imageLoadEvent/fileName':         'File Name',
+	'imageLoadEvent/fullPath':         'File Full Path',
+	'imageLoadEvent/filePath':         'File Full Path',
+	'regKeyEvent/keyPath':             'Registry Key Full Path',
+	'regKeyEvent/path':                'Registry Key Full Path',
+	'regKeyEvent/valueName':           'Registry Key Value Name',
+	'regKeyEvent/value':               'Registry Key Value Text',
+	'regKeyEvent/text':                'Registry Key Value Text',
+	'regKeyEvent/username':            'Username',
+	'dnsLookupEvent/hostname':         'DNS Hostname',
+	'dnsLookupEvent/username':         'Username',
+	'ipv4NetworkEvent/remoteIP':       'Remote IP Address',
+	'ipv4NetworkEvent/localIP':        'Local IP Address',
+	'ipv4NetworkEvent/remotePort':     'Remote Port',
+	'ipv4NetworkEvent/localPort':      'Local Port',
+	'ipv4NetworkEvent/username':       'Username',
+	'urlMonitorEvent/requestUrl':      'URL',
+	'urlMonitorEvent/hostname':        'DNS Hostname',
+	'urlMonitorEvent/remoteIpAddress': 'Remote IP Address',
+	'urlMonitorEvent/httpHeader':      'HTTP Header',
+	'urlMonitorEvent/username':        'Username',
+}
+
+# Stored condition operators -> HX query-array operators.
+_STORED_OP_TO_QUERY_OP = {
+	'equal': 'equals', 'is': 'equals', 'equals': 'equals',
+	'contains': 'contains',
+	'starts-with': 'starts with', 'starts with': 'starts with',
+	'ends-with': 'ends with', 'ends with': 'ends with',
+	'greater-than': 'greater than', 'greater than': 'greater than',
+	'less-than': 'less than', 'less than': 'less than',
+	'between': 'between',
+	'matches': 'contains',   # regex not supported by field search; best-effort substring
+}
+
+
+def _stored_op_to_query(op, negate=False):
+	q = _STORED_OP_TO_QUERY_OP.get((op or 'equal').lower(), 'equals')
+	if negate:
+		if q == 'equals':
+			return 'not equals'
+		if q == 'contains':
+			return 'not contains'
+	return q
+
+
+def _local_catalog_query_searches(entry, base_displayname):
+	"""Convert a local-catalog rule's stored conditions into HX field/query searches.
+	Returns (searches, unmapped_tokens). One search per distinct HX field (each search is
+	single item-type, so it's always a valid query-array combination); values for the same
+	field are OR'd within that search.
+	"""
+	from collections import OrderedDict
+	groups = OrderedDict()   # field -> [ {field, operator, value} ]
+	unmapped = []
+	for cset in list(entry.get('presence', [])) + list(entry.get('execution', [])):
+		for test in (cset if isinstance(cset, list) else []):
+			token = _TOKEN_ALIAS_MAP.get(test.get('token', ''), test.get('token', '')).replace('eventItem/', '')
+			field = _TOKEN_TO_SEARCH_FIELD.get(token)
+			if not field:
+				if token:
+					unmapped.append(token)
+				continue
+			operator = _stored_op_to_query(test.get('operator', 'equal'), bool(test.get('negate', False)))
+			groups.setdefault(field, []).append({'field': field, 'operator': operator, 'value': str(test.get('value', ''))})
+	searches, multi = [], (len(groups) > 1)
+	for field, terms in groups.items():
+		searches.append({
+			'field': field,
+			'displayname': (base_displayname + ' - ' + field) if multi else base_displayname,
+			'query': terms,
+		})
+	return searches, sorted(set(unmapped))
 
 @ht_api.route(f'/api/v{HXTOOL_API_VERSION}/enterprise_search/new/local_catalog', methods=['POST'])
 @valid_session_required
 def hxtool_api_enterprise_search_new_local_catalog(hx_api_object):
 	data = request.json or {}
 	ids = data.get('ids', [])
+	custom_names = data.get('names', {})  # {id: displayname} — user-edited names from modal
 	hostset_id = data.get('sweephostset')
 	if not hostset_id or hostset_id == 'false':
 		return app.response_class(response=json.dumps("Please select a host set."), status=400, mimetype='application/json')
 
 	ignore_unsupported = data.get('esskipterms', 'true') != 'false'
+	# Exhaustive scans full historical audit data (not just the live event buffer). Off by
+	# default (quick sweep); the LC hunt modal exposes a checkbox to enable it.
+	exhaustive = bool(data.get('exhaustive', False))
 	(start_time, schedule) = parse_schedule(data)
+	# "Run now" = no future start time and no recurring interval. Run-now hunts are submitted
+	# synchronously via restSubmitSweep so HX errors (bad OpenIOC, unsupported items, etc.)
+	# surface in the UI instead of being buried in the scheduler log.
+	run_now = (start_time is None and not schedule)
 
-	created, failed = 0, []
+	created, results = 0, []
+	for lid in ids:
+		entry = hxtool_global.hxtool_db.localCatalogGet(lid)
+		name = (entry.get('name', '') if entry else '') or str(lid)
+		base_displayname = custom_names.get(str(lid)) or custom_names.get(lid) or ('HUNT_' + name)
+		if not entry:
+			results.append({'id': lid, 'name': name, 'ok': False, 'error': 'Rule not found in local catalog.'})
+			continue
+
+		# Build HX field/query searches (one per distinct field) from the rule's conditions.
+		searches, unmapped = _local_catalog_query_searches(entry, base_displayname)
+		if not searches:
+			reason = 'Rule has no huntable conditions.'
+			if unmapped:
+				reason = 'No conditions map to an HX search field (unmapped tokens: ' + ', '.join(unmapped) + ').'
+			results.append({'id': lid, 'name': name, 'ok': False, 'error': reason})
+			continue
+
+		for s in searches:
+			query, dn = s['query'], s['displayname']
+			if run_now:
+				(ret, response_code, response_data) = hx_api_object.restSubmitQuerySearch(
+					query, hostset_id, displayname=dn, exhaustive=exhaustive)
+				if ret:
+					search_id = None
+					try:
+						search_id = response_data.get('data', {}).get('_id')
+					except Exception:
+						pass
+					hxtool_global.hxtool_db.huntQueryCreate(dn, query)
+					created += 1
+					results.append({'id': lid, 'name': dn, 'ok': True, 'search_id': search_id})
+				else:
+					results.append({'id': lid, 'name': dn, 'ok': False,
+						'error': _hx_error_message(response_data, response_code)})
+			else:
+				task = hxtool_scheduler_task(session['ht_profileid'], 'Hunt Task', start_time=start_time)
+				if schedule:
+					task.set_schedule(**schedule)
+				task.add_step(hunt_search_task_module, kwargs={
+					'query': query,
+					'hostset_id': hostset_id,
+					'displayname': dn,
+					'exhaustive': exhaustive,
+				})
+				hxtool_global.hxtool_scheduler.add(task)
+				hxtool_global.hxtool_db.huntQueryCreate(dn, query)
+				created += 1
+				results.append({'id': lid, 'name': dn, 'ok': True, 'scheduled': True})
+
+	failed = [r['id'] for r in results if not r['ok']]
+	app.logger.info(format_activity_log(msg="enterprise search", action="hunt", count=created, user=session['ht_user'], controller=session['hx_ip']))
+	return app.response_class(
+		response=json.dumps({'created': created, 'results': results, 'failed': failed}),
+		status=200, mimetype='application/json')
+
+
+@ht_api.route(f'/api/v{HXTOOL_API_VERSION}/enterprise_search/preview/local_catalog', methods=['POST'])
+@valid_session_required
+def hxtool_api_enterprise_search_preview_local_catalog(hx_api_object):
+	data = request.json or {}
+	ids = data.get('ids', [])
+	hostset_id = int(data.get('sweephostset') or 0)
+
+	results = []
 	for lid in ids:
 		entry = hxtool_global.hxtool_db.localCatalogGet(lid)
 		if not entry:
-			failed.append(lid)
+			results.append({'name': lid, 'ok': False, 'reason': 'Rule not found'})
 			continue
-		xml_str = _conditions_to_openioc_xml(
-			entry.get('presence', []), entry.get('execution', []),
-			name=entry.get('name', ''))
-		if not xml_str:
-			failed.append(lid)
+		name = entry.get('name', lid)
+		searches, unmapped = _local_catalog_query_searches(entry, f'HUNT_{name}')
+		if not searches:
+			reason = 'No huntable conditions'
+			if unmapped:
+				reason = 'No conditions map to an HX search field (unmapped: ' + ', '.join(unmapped) + ')'
+			results.append({'name': name, 'ok': False, 'reason': reason})
 			continue
-		fixed = re.sub(
-			r'<Context\s+document="(?!eventItem).+"\s+search="(?!eventItem/)(?P<search>.+Event.+)"\s+type="(?!mir).+"\s+/>',
-			r'<Context document="eventItem" search="eventItem/\g<search>" type="event" />',
-			xml_str, flags=re.IGNORECASE)
-		task = hxtool_scheduler_task(session['ht_profileid'], 'Enterprise Search Task', start_time=start_time)
-		if schedule:
-			task.set_schedule(**schedule)
-		task.add_step(enterprise_search_task_module, kwargs={
-			'script': HXAPI.b64(fixed),
-			'hostset_id': hostset_id,
-			'ignore_unsupported_items': ignore_unsupported,
-			'skip_base64': True,
-			'displayname': 'HUNT_' + entry.get('name', 'Unknown'),
+		results.append({
+			'name': name,
+			'ok': True,
+			'unmapped': unmapped,
+			'searches': [{
+				'displayname': s['displayname'],
+				'host_set': {'_id': hostset_id},
+				'query': s['query'],
+			} for s in searches],
 		})
-		hxtool_global.hxtool_scheduler.add(task)
-		created += 1
 
-	app.logger.info(format_activity_log(msg="enterprise search", action="hunt", count=created, user=session['ht_user'], controller=session['hx_ip']))
 	return app.response_class(
-		response=json.dumps({'created': created, 'failed': failed}),
+		response=json.dumps(results),
 		status=200, mimetype='application/json')
 
 
@@ -558,8 +768,77 @@ def hxtool_api_hunt_types(hx_api_object):
 	enabled = settings.get('enabled_types')
 	if enabled is None:
 		enabled = hxtool_global.hxtool_config.huntSettings().get('enabled_types', [ht['id'] for ht in HUNT_TYPES])
-	filtered = [ht for ht in HUNT_TYPES if ht['id'] in enabled]
-	return app.response_class(response=json.dumps(filtered, default=str), status=200, mimetype='application/json')
+	type_overrides = settings.get('type_overrides', {})
+	result = []
+	for ht in HUNT_TYPES:
+		entry = dict(ht)
+		overrides = type_overrides.get(ht['id'], {})
+		if 'regexes' in overrides:
+			entry['regexes'] = overrides['regexes']
+		# query_fields come from the configurable field-mapping file (single source of truth)
+		entry['query_fields'] = get_query_fields(ht['id'])
+		entry['enabled'] = ht['id'] in enabled
+		result.append(entry)
+	if not request.args.get('all'):
+		result = [ht for ht in result if ht['enabled']]
+	return app.response_class(response=json.dumps(result, default=str), status=200, mimetype='application/json')
+
+
+@ht_api.route(f'/api/v{HXTOOL_API_VERSION}/hunt/settings', methods=['POST'])
+@valid_session_required
+def hxtool_api_hunt_settings_save(hx_api_object):
+	data = request.json or {}
+	enabled_types = data.get('enabled_types', [])
+	type_overrides = data.get('type_overrides', {})
+	hxtool_global.hxtool_db.huntSettingsSet({'enabled_types': enabled_types, 'type_overrides': type_overrides})
+	app.logger.info(format_activity_log(msg="hunt settings", action="save", user=session['ht_user'], controller=session['hx_ip']))
+	return app.response_class(response=json.dumps({'ok': True}), status=200, mimetype='application/json')
+
+
+@ht_api.route(f'/api/v{HXTOOL_API_VERSION}/hunt/fields', methods=['GET', 'POST'])
+@valid_session_required
+def hxtool_api_hunt_fields(hx_api_object):
+	if request.method == 'GET':
+		# Pre-populate the editor: file mapping where set, built-in defaults otherwise.
+		mappings = {ht['id']: get_query_fields(ht['id']) for ht in HUNT_TYPES}
+		result = {
+			'types': [{'id': ht['id'], 'name': ht['name']} for ht in HUNT_TYPES],
+			'searchable_fields': SEARCHABLE_FIELDS,
+			'operators': HUNT_OPERATORS,
+			'operators_by_type': OPERATORS_BY_TYPE,
+			'field_types': FIELD_TYPES,
+			'mappings': mappings,
+		}
+		return app.response_class(response=json.dumps(result, default=str), status=200, mimetype='application/json')
+
+	# POST — validate and persist to the local JSON file
+	data = request.json or {}
+	mappings = data.get('mappings', {})
+	if not isinstance(mappings, dict):
+		return make_response_by_code(400)
+	try:
+		cleaned = save_field_mappings(mappings)
+	except Exception as e:
+		app.logger.error("hunt field mapping save failed: %s", e)
+		return app.response_class(response=json.dumps({'ok': False, 'error': str(e)}), status=500, mimetype='application/json')
+	app.logger.info(format_activity_log(msg="hunt field mapping", action="save", user=session['ht_user'], controller=session['hx_ip']))
+	return app.response_class(response=json.dumps({'ok': True, 'mappings': cleaned}), status=200, mimetype='application/json')
+
+
+def _hx_error_message(response_data, response_code=None):
+	"""Extract a human-readable error message from an HX API error response."""
+	try:
+		if isinstance(response_data, dict):
+			details = response_data.get('details')
+			if isinstance(details, list) and details and isinstance(details[0], dict) and details[0].get('message'):
+				return details[0]['message']
+			if response_data.get('message'):
+				return response_data['message']
+		elif isinstance(response_data, str) and response_data.strip():
+			return response_data.strip()
+	except Exception:
+		pass
+	return f'HX API error{(" (HTTP " + str(response_code) + ")") if response_code else ""}.'
 
 
 @ht_api.route(f'/api/v{HXTOOL_API_VERSION}/hunt/submit', methods=['POST'])
@@ -573,35 +852,54 @@ def hxtool_api_hunt_submit(hx_api_object):
 
 	(start_time, schedule) = parse_schedule(data)
 	timestamp = datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')
+	# "Run now" = no future start time and no recurring interval.
+	run_now = (start_time is None and not schedule)
 
-	created, failed, created_names = 0, [], []
+	# HX enterprise search requires every field in a single query to share an audit item
+	# type, so different IOC types (hash vs network vs registry ...) cannot be combined
+	# into one search. We submit one search per IOC type. For run-now hunts we call HX
+	# synchronously so per-type errors (e.g. invalid field combination) surface in the UI.
+	created, results = 0, []
 	for group in groups:
 		type_id = group.get('typeId', '')
 		values = group.get('values', [])
-		if not values:
-			failed.append(type_id)
-			continue
-		query = ioc_group_to_query_array(type_id, values)
-		if not query:
-			failed.append(type_id)
-			continue
 		displayname = f'HUNT_{type_id}_{timestamp}'
-		task = hxtool_scheduler_task(session['ht_profileid'], 'Hunt Task', start_time=start_time)
-		if schedule:
-			task.set_schedule(**schedule)
-		task.add_step(hunt_search_task_module, kwargs={
-			'query': query,
-			'hostset_id': hostset_id,
-			'displayname': displayname,
-		})
-		hxtool_global.hxtool_scheduler.add(task)
-		hxtool_global.hxtool_db.huntQueryCreate(displayname, query)
-		created += 1
-		created_names.append(displayname)
+		query = ioc_group_to_query_array(type_id, values) if values else None
+		if not query:
+			results.append({'typeId': type_id, 'displayname': displayname, 'ok': False,
+				'error': 'No searchable fields configured for this IOC type.'})
+			continue
 
+		if run_now:
+			(ret, response_code, response_data) = hx_api_object.restSubmitQuerySearch(query, hostset_id, displayname=displayname)
+			if ret:
+				search_id = None
+				try:
+					search_id = response_data.get('data', {}).get('_id')
+				except Exception:
+					pass
+				hxtool_global.hxtool_db.huntQueryCreate(displayname, query)
+				created += 1
+				results.append({'typeId': type_id, 'displayname': displayname, 'ok': True, 'search_id': search_id})
+			else:
+				results.append({'typeId': type_id, 'displayname': displayname, 'ok': False,
+					'error': _hx_error_message(response_data, response_code)})
+		else:
+			task = hxtool_scheduler_task(session['ht_profileid'], 'Hunt Task', start_time=start_time)
+			if schedule:
+				task.set_schedule(**schedule)
+			task.add_step(hunt_search_task_module, kwargs={
+				'query': query, 'hostset_id': hostset_id, 'displayname': displayname,
+			})
+			hxtool_global.hxtool_scheduler.add(task)
+			hxtool_global.hxtool_db.huntQueryCreate(displayname, query)
+			created += 1
+			results.append({'typeId': type_id, 'displayname': displayname, 'ok': True, 'scheduled': True})
+
+	failed = [r['typeId'] for r in results if not r['ok']]
 	app.logger.info(format_activity_log(msg="hunt submit", action="new", count=created, user=session['ht_user'], controller=session['hx_ip']))
 	return app.response_class(
-		response=json.dumps({'created': created, 'failed': failed, 'displaynames': created_names}),
+		response=json.dumps({'created': created, 'results': results, 'failed': failed}),
 		status=200, mimetype='application/json')
 
 
@@ -1645,8 +1943,21 @@ def hxtool_api_indicators_import(hx_api_object):
 @ht_api.route(f'/api/v{HXTOOL_API_VERSION}/datatable_local_catalog', methods=['GET'])
 @valid_session_required
 def hxtool_api_datatable_local_catalog(hx_api_object):
+	def _flatten_conditions(conds):
+		parts = []
+		for group in conds:
+			# Local catalog: group is a list of test dicts directly
+			tests = group if isinstance(group, list) else group.get('tests', [])
+			for test in tests:
+				if isinstance(test, dict):
+					parts.extend([test.get('token', ''), test.get('operator', ''), str(test.get('value', '') or '')])
+		return ' '.join(filter(None, parts))
+
 	mydata = {'data': []}
 	for entry in hxtool_global.hxtool_db.localCatalogList():
+		presence = entry.get('presence', [])
+		execution = entry.get('execution', [])
+		conditions_text = _flatten_conditions(presence) + ' ' + _flatten_conditions(execution)
 		mydata['data'].append({
 			'DT_RowId': entry['local_catalog_id'],
 			'local_catalog_id': entry['local_catalog_id'],
@@ -1655,9 +1966,10 @@ def hxtool_api_datatable_local_catalog(hx_api_object):
 			'category': entry.get('category', ''),
 			'platforms': entry.get('platforms', []),
 			'description': entry.get('description', ''),
-			'presence_count': len(entry.get('presence', [])),
-			'execution_count': len(entry.get('execution', [])),
+			'presence_count': len(presence),
+			'execution_count': len(execution),
 			'create_timestamp': entry.get('create_timestamp', ''),
+			'conditions_text': conditions_text,
 		})
 	return app.response_class(response=json.dumps(mydata), status=200, mimetype='application/json')
 
@@ -1671,6 +1983,44 @@ def hxtool_api_local_catalog_delete(hx_api_object):
 	for local_catalog_id in request_json['ids']:
 		hxtool_global.hxtool_db.localCatalogDelete(local_catalog_id)
 	app.logger.info(format_activity_log(msg="local catalog action", action="delete", count=len(request_json['ids']), user=session['ht_user']))
+	return make_response_by_code(200)
+
+
+@ht_api.route(f'/api/v{HXTOOL_API_VERSION}/local_catalog/groups', methods=['GET', 'POST', 'DELETE'])
+@valid_session_required
+def hxtool_api_local_catalog_groups(hx_api_object):
+	if request.method == 'GET':
+		explicit = hxtool_global.hxtool_db.lcGroupsList()
+		category_values = {e.get('category', 'Root') or 'Root' for e in hxtool_global.hxtool_db.localCatalogList()}
+		all_groups = sorted(set(explicit) | category_values | {'Root'})
+		return app.response_class(response=json.dumps(all_groups), status=200, mimetype='application/json')
+
+	if request.method == 'POST':
+		body = request.json or {}
+		name = (body.get('name') or '').strip()
+		if not name or name == 'Root':
+			return make_response_by_code(400)
+		hxtool_global.hxtool_db.lcGroupCreate(name)
+		app.logger.info(format_activity_log(msg="local catalog group create", name=name, user=session['ht_user']))
+		return make_response_by_code(200)
+
+	if request.method == 'DELETE':
+		body = request.json or {}
+		name = (body.get('name') or '').strip()
+		if not name or name == 'Root':
+			return make_response_by_code(400)
+		hxtool_global.hxtool_db.lcGroupDelete(name)
+		app.logger.info(format_activity_log(msg="local catalog group delete", name=name, user=session['ht_user']))
+		return make_response_by_code(200)
+
+
+@ht_api.route(f'/api/v{HXTOOL_API_VERSION}/local_catalog/<string:local_catalog_id>/group', methods=['PATCH'])
+@valid_session_required
+def hxtool_api_local_catalog_update_group(hx_api_object, local_catalog_id):
+	body = request.json or {}
+	group = (body.get('group') or 'Root').strip() or 'Root'
+	hxtool_global.hxtool_db.localCatalogUpdateGroup(local_catalog_id, group)
+	app.logger.info(format_activity_log(msg="local catalog group move", id=local_catalog_id, group=group, user=session['ht_user']))
 	return make_response_by_code(200)
 
 
@@ -2207,12 +2557,15 @@ def hxtool_api_indicators_edit(hx_api_object):
 	myOriginalCategory = mydata['originalcategory']
 	myState = True
 
+	# category may be absent if the dropdown AJAX hadn't finished before submit; fall back to the original
+	mycategory = mydata.get('category') or myOriginalCategory
+
 	if mydata['platform'] == "all":
 		chosenplatform = ['win', 'osx', 'linux']
 	else:
 		chosenplatform = [mydata['platform']]
 
-	(ret, response_code, response_data) = hx_api_object.restAddIndicator(mydata['category'], mydata['name'], session['ht_user'], chosenplatform, description=mydata['description'])
+	(ret, response_code, response_data) = hx_api_object.restAddIndicator(mycategory, mydata['name'], session['ht_user'], chosenplatform, description=mydata['description'])
 	if ret:
 		myNewURI = response_data['data']['_id']
 		for key, value in mydata.items():
@@ -2229,7 +2582,7 @@ def hxtool_api_indicators_edit(hx_api_object):
 					else:
 						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data'], "negate": True, "preservecase": True})
 
-				(ret, response_code, response_data) = hx_api_object.restAddCondition(mydata['category'], myNewURI, ioctype, json.dumps(mytests))
+				(ret, response_code, response_data) = hx_api_object.restAddCondition(mycategory, myNewURI, ioctype, json.dumps(mytests))
 				if not ret:
 					# Condition was not added successfully set state to False to prevent the original indicator from being removed
 					myState = False
@@ -2239,7 +2592,7 @@ def hxtool_api_indicators_edit(hx_api_object):
 			# Remove the original indicator
 			(ret, response_code, response_data) = hx_api_object.restDeleteIndicator(myOriginalCategory, myOriginalURI)
 
-		app.logger.info(format_activity_log(msg="rule action", action="edit", name=mydata['name'], category=mydata['category'], user=session['ht_user'], controller=session['hx_ip']))
+		app.logger.info(format_activity_log(msg="rule action", action="edit", name=mydata['name'], category=mycategory, user=session['ht_user'], controller=session['hx_ip']))
 		return('', 204)
 	else:
 		# Failed to create indicator
@@ -3618,28 +3971,38 @@ def hxtool_api_enterprise_search_detail(hx_api_object):
 	settings = s.get('settings') or {}
 	stats = s.get('stats', {})
 	search_state = stats.get('search_state', {})
-	conditions = _parse_ioc_conditions(settings.get('indicator', ''))
+	displayname = settings.get('displayname') or s.get('displayname') or 'N/A'
 
-	# Query-based searches use a 'query' array instead of an OpenIOC indicator.
-	# HX may return the query in settings or at the top level; if not, fall back to
-	# the persistent lookup stored by the hunt submit endpoint.
+	# Try decoding the OpenIOC indicator returned by HX (present in some versions)
+	indicator_b64 = s.get('indicator') or settings.get('indicator') or ''
+	conditions = _parse_ioc_conditions(indicator_b64)
+
 	if not conditions:
-		raw_query = settings.get('query') or s.get('query') or []
+		# Query-based searches: HX may return the query array at top-level or in settings
+		raw_query = s.get('query') or settings.get('query') or []
 		if not raw_query:
-			stored = hxtool_global.hxtool_db.huntQueryGet(settings.get('displayname', ''))
+			# Fall back to conditions stored in HXTool DB at submission time
+			stored = hxtool_global.hxtool_db.huntQueryGet(displayname)
 			raw_query = (stored or {}).get('query', [])
 		for q in raw_query:
-			conditions.append({
-				'token':     q.get('field', ''),
-				'condition': q.get('operator', 'equals'),
-				'value':     q.get('value', ''),
-				'type':      'string',
-				'negate':    bool(q.get('negate', False)),
-			})
+			if not isinstance(q, dict):
+				continue
+			if 'token' in q:
+				# Stored as conditions list (local-catalog hunt)
+				conditions.append(q)
+			elif 'field' in q:
+				# Stored as query array (IOC hunt)
+				conditions.append({
+					'token':     q.get('field', ''),
+					'condition': q.get('operator', 'equals'),
+					'value':     q.get('value', ''),
+					'type':      'string',
+					'negate':    bool(q.get('negate', False)),
+				})
 
 	return app.response_class(response=json.dumps({
 		'id': s.get('_id'),
-		'displayname': settings.get('displayname', 'N/A'),
+		'displayname': displayname,
 		'state': s.get('state', 'N/A'),
 		'host_set': (s.get('host_set') or {}).get('name', 'N/A'),
 		'host_set_id': (s.get('host_set') or {}).get('_id'),

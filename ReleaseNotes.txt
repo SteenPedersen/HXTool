@@ -1,7 +1,93 @@
 HXTool Release Notes
 ====================
-Version 26.08-pre
------------------
+Version 26.09
+-------------
+
+LOCAL CATALOG — RULE GROUPS
+---------------------------
+  - Replaced the Local Catalog DataTable with a collapsible group tree view. Rules
+    are organized into groups (default "Root"); each group's expand/collapse state
+    is remembered.
+  - Create and delete groups; deleting a group moves its rules back to Root.
+  - Drag-and-drop rules between groups. Shift-click to multi-select and drag all
+    selected rules into a group at once.
+  - Rules render in an aligned, sortable table (Name, Created, Platforms,
+    Description, presence/execution match counts). Created shows full date and
+    time; column widths auto-fit their content.
+  - The catalog search/filter box now matches the Server Rules search field in
+    font, colour and size.
+
+
+IOC HUNT (NEW)
+--------------
+  - New "IOC Hunt" page under Enterprise Search: paste raw threat intel,
+    auto-detect IOC types (SHA256, SHA1, MD5, IP, DNS/domain, URL, registry,
+    process/file, command line) with colour-coded highlighting, then submit HX
+    Enterprise Searches.
+  - Force a type per line with a prefix — e.g. "url,", "domain,", "filename,",
+    "file_path_name,", "md5,", "sha1,", "sha256,". A second comma starts a
+    comment, e.g. "filename,evil.csv,notes here" only takes evil.csv.
+  - Added SHA1 as a detected/searchable hash type.
+  - Run-now hunts submit synchronously so per-type success (with search ID) and HX
+    errors are shown directly in the UI.
+
+
+IOC HUNT — SETTINGS & FIELD MAPPING (ADMIN)
+-------------------------------------------
+  - New Admin menu items: "IOC Hunt detection settings" and "IOC Hunt field
+    mapping". The detection settings previously on the HXTool Settings page were
+    moved to this dedicated page.
+  - Field mapping: configure which HX Enterprise Search field(s) each IOC type is
+    searched against (multiple fields per type). Available operators adapt to the
+    field's data type (text vs numeric/date vs boolean). Stored in a local file
+    (ioc_hunt_fields.json) that can be edited and saved at any time.
+  - Detection settings are shown in a two-column layout; field mapping in a
+    multi-column layout.
+
+
+LOCAL CATALOG — HUNT (ENTERPRISE SEARCH)
+----------------------------------------
+  - Hunting selected Local Catalog rules now builds HX field/query Enterprise
+    Searches (the same mechanism as the HX console field picker) by mapping each
+    condition's event token to the corresponding HX search field, so hunts return
+    results against indexed audit data.
+  - One search is created per distinct field to satisfy HX's field item-type
+    combination rules; multiple values for the same field are OR'd (instead of
+    impossibly AND'd).
+  - Run-now hunts submit synchronously and report per-rule/per-search success (with
+    search ID) or the exact HX error; scheduled hunts run via the scheduler.
+  - Optional "Exhaustive search" toggle (off by default) scans full historical
+    audit data instead of only the live event buffer.
+  - The Hunt API preview shows the exact query payload with a readable
+    "Copy payload" button.
+
+
+ENTERPRISE SEARCH / TABLES
+--------------------------
+  - Search detail now includes the requested search criteria / indicator content.
+  - Tables indicate the active sort column and direction.
+
+
+VERSIONING
+----------
+  - Version bumped to 26.09.
+  - The version number is now shown on the login page and in the main UI top
+    navigation bar (available to all pages).
+
+
+CODEBASE / INTERNAL (26.09)
+---------------------------
+  - New backend for Local Catalog groups (list / create / delete, per-rule group
+    update) and IOC Hunt (submit, types, field mapping), plus the
+    token-to-search-field mapping and the OpenIOC / query builders.
+  - Added exhaustive-search support to enterprise search submission
+    (restSubmitSweep, restSubmitQuerySearch) and the related task modules.
+  - Server Rules table now reloads fresh (cache-busted) after a rule is added.
+
+
+================================================================================
+The following changes were introduced in 26.08-pre and are included in 26.09:
+================================================================================
 
 MANAGE RULES — IOC INDICATOR IMPROVEMENTS
 ------------------------------------------

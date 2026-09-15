@@ -99,6 +99,14 @@
 		min-width: 120px;
 	}
 	#acqFilterBar input { min-width: 160px; }
+	/* OS cell: single-line with ellipsis */
+	.acq-os-cell {
+		display: block;
+		max-width: 180px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 </style>
 
 <script>
@@ -150,6 +158,14 @@
 				 "targets": 1,
 				 render: function ( data, type, row, meta ) {
 				 	return(datatables_parseHostlink(data));
+				 }
+				},
+				{
+				 "targets": 3,
+				 render: function ( data, type, row, meta ) {
+				 	if (type !== 'display') return data || '';
+				 	var esc = String(data || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+				 	return '<span class="acq-os-cell" title="' + esc + '">' + esc + '</span>';
 				 }
 				},
 				{
@@ -227,48 +243,68 @@
 		});
 		$('div.dataTables_filter input').addClass("fe-input");
 
-		// Exclude _HX_enricher rows when the checkbox is checked.
-		$.fn.dataTable.ext.search.push(function(settings, data, dataIndex, rowData) {
-			if (settings.nTable !== document.getElementById('acqTable')) return true;
-			if ($('#acqHideEnricher').is(':checked') && rowData.request_user === '_HX_enricher') return false;
-			return true;
+		// ── Requested By filter ───────────────────────────────────────────────
+		// currentUserFilter holds the active selection as a plain JS variable so
+		// ext.search can read it without touching the DOM during the draw cycle.
+		// '' = All | '__excl_enricher' = All excl. _HX_enricher | else exact user.
+		var currentUserFilter = '__excl_enricher';
+		// Match _HX_enricher or _HX__enricher (HX uses either spelling)
+		var ENRICHER_RE = /^_HX_+enricher$/i;
+
+		$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+			if (settings.nTable.id !== 'acqTable') return true;
+			if (currentUserFilter === '') return true;
+			var user = data[5] || '';
+			if (currentUserFilter === '__excl_enricher') return !ENRICHER_RE.test(user);
+			if (currentUserFilter === '__only_enricher') return ENRICHER_RE.test(user);
+			if (currentUserFilter === '__only_na') return user === 'N/A';
+			return user === currentUserFilter;
 		});
+
+		function applyUserFilter() {
+			currentUserFilter = $('#acqFilterUser').val();
+		}
 
 		// ── Filter bar wiring ──────────────────────────────────────────────────
-		// Requested By column (5): exact match via select.
 		$('#acqFilterUser').on('change', function() {
-			acq_datatable.column(5).search($(this).val(), false, false).draw();
+			applyUserFilter();
+			acq_datatable.draw();
 		});
 
-		// State column (9): exact match via select.
+		// State column (9): exact match via column search.
 		$('#acqFilterState').on('change', function() {
 			acq_datatable.column(9).search($(this).val(), false, false).draw();
 		});
 
-		$('#acqHideEnricher').on('change', function() {
-			rebuildFilterSelects();
-			acq_datatable.draw();
-		});
-
 		// Rebuild Requested By and State selects from current table data.
 		function rebuildFilterSelects() {
-			var userVal  = $('#acqFilterUser').val();
-			var stateVal = $('#acqFilterState').val();
-
-			['#acqFilterUser', '#acqFilterState'].forEach(function(sel, i) {
-				var col = (i === 0) ? 5 : 9;
-				var $sel = $(sel);
-				var current = $sel.val();
-				var vals = {};
-				acq_datatable.column(col).data().each(function(d) {
-					if (d && d !== 'N/A' && !(col === 5 && d === '_HX_enricher' && $('#acqHideEnricher').is(':checked'))) vals[d] = true;
-				});
-				$sel.find('option:not(:first)').remove();
-				Object.keys(vals).sort().forEach(function(v) {
-					$sel.append('<option value="' + v + '">' + v + '</option>');
-				});
-				if (current) $sel.val(current);
+			// User select: keep fixed options, repopulate individual users (excl. _HX_enricher)
+			var userCurrent = $('#acqFilterUser').val() || '__excl_enricher';
+			$('#acqFilterUser').find('option:not([value=""],[value="__excl_enricher"],[value="__only_enricher"],[value="__only_na"])').remove();
+			var users = {};
+			acq_datatable.column(5).data().each(function(d) {
+				if (d && d !== 'N/A' && !ENRICHER_RE.test(d)) users[d] = true;
 			});
+			Object.keys(users).sort().forEach(function(v) {
+				$('#acqFilterUser').append('<option value="' + v + '">' + v + '</option>');
+			});
+			$('#acqFilterUser').val(userCurrent);
+			if (!$('#acqFilterUser').val()) $('#acqFilterUser').val('__excl_enricher');
+			applyUserFilter();
+
+			// State select
+			var stateCurrent = $('#acqFilterState').val();
+			$('#acqFilterState').find('option:not(:first)').remove();
+			var states = {};
+			acq_datatable.column(9).data().each(function(d) {
+				if (d && d !== 'N/A') states[d] = true;
+			});
+			Object.keys(states).sort().forEach(function(v) {
+				$('#acqFilterState').append('<option value="' + v + '">' + v + '</option>');
+			});
+			if (stateCurrent) $('#acqFilterState').val(stateCurrent);
+
+			acq_datatable.draw(false);
 		}
 
 		// ── Action button clicks (must not bubble to row-click handler) ────────
@@ -437,12 +473,14 @@
 		<!-- Filter bar -->
 		<div id="acqFilterBar">
 			<label>Requested By</label>
-			<select id="acqFilterUser"><option value="">All</option></select>
+			<select id="acqFilterUser">
+				<option value="">All</option>
+				<option value="__excl_enricher" selected>All excl. _HX_enricher</option>
+				<option value="__only_enricher">_HX_enricher only</option>
+				<option value="__only_na">N/A only</option>
+			</select>
 			<label>State</label>
 			<select id="acqFilterState"><option value="">All</option></select>
-			<label style="margin-left:16px; cursor:pointer;">
-				<input type="checkbox" id="acqHideEnricher" checked> Hide _HX_enricher
-			</label>
 		</div>
 
 		<table id='acqTable' class='hxtool_table' style='width: 100%'></table>

@@ -45,6 +45,13 @@ class enterprise_search_task_module(task_module):
 				'required' : False,
 				'user_supplied' : True,
 				'description' : "Specifies the display name of the search. Defaults to False"
+			},
+			{
+				'name' : 'exhaustive',
+				'type' : bool,
+				'required' : False,
+				'user_supplied' : True,
+				'description' : "Run an exhaustive search (scan full historical audit data) instead of a quick event-buffer sweep. Defaults to False"
 			}
 		]
 		
@@ -59,13 +66,13 @@ class enterprise_search_task_module(task_module):
 			}
 		]
 	
-	def run(self, script = None, hostset_id = None, ignore_unsupported_items = False, skip_base64 = False, displayname = False):
+	def run(self, script = None, hostset_id = None, ignore_unsupported_items = False, skip_base64 = False, displayname = False, exhaustive = False):
 		ret = False
 		result = {}
 		if script:
-			hx_api_object = self.get_task_api_object()	
+			hx_api_object = self.get_task_api_object()
 			if hx_api_object and hx_api_object.restIsSessionValid():
-				(ret, response_code, response_data) = hx_api_object.restSubmitSweep(script, hostset_id, ignore_unsupported_items = ignore_unsupported_items, skip_base64 = skip_base64, displayname = displayname)
+				(ret, response_code, response_data) = hx_api_object.restSubmitSweep(script, hostset_id, ignore_unsupported_items = ignore_unsupported_items, skip_base64 = skip_base64, displayname = displayname, exhaustive = exhaustive)
 				if ret:
 					result['enterprise_search_id'] = response_data['data']['_id']
 					self.parent_task.name = f"Enterprise Search ID: {response_data['data']['_id']}"

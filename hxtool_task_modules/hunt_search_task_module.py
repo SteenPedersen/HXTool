@@ -32,6 +32,13 @@ class hunt_search_task_module(task_module):
                 'user_supplied': True,
                 'description': 'Display name for the search.',
             },
+            {
+                'name': 'exhaustive',
+                'type': bool,
+                'required': False,
+                'user_supplied': True,
+                'description': 'Run an exhaustive search (full historical audit) instead of a quick sweep. Defaults to False.',
+            },
         ]
 
     @staticmethod
@@ -45,14 +52,14 @@ class hunt_search_task_module(task_module):
             }
         ]
 
-    def run(self, query=None, hostset_id=None, displayname=None):
+    def run(self, query=None, hostset_id=None, displayname=None, exhaustive=False):
         ret = False
         result = {}
         if query:
             hx_api_object = self.get_task_api_object()
             if hx_api_object and hx_api_object.restIsSessionValid():
                 (ret, response_code, response_data) = hx_api_object.restSubmitQuerySearch(
-                    query, hostset_id, displayname=displayname)
+                    query, hostset_id, displayname=displayname, exhaustive=exhaustive)
                 if ret:
                     result['enterprise_search_id'] = response_data['data']['_id']
                     self.parent_task.name = f"Hunt Search ID: {response_data['data']['_id']}"

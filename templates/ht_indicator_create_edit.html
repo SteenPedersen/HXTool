@@ -299,7 +299,7 @@
 
 				data['name'] = $('#indicator_name').val();
 				data['description'] = $('#indicatorDesc').val();
-				data['category'] = $('#cats').data("id");
+				data['category'] = $('#cats').data("id") || (typeof ioccategory !== 'undefined' ? ioccategory : '') || '';
 				data['platform'] = $('#indicator_platform').data("id");
 
 				// Need to add original name and category if we are in edit mode
@@ -371,7 +371,7 @@
 						var catalogId = $('#myTitle').data('catalog-id');
 
 						hxtool_ajax_post_request("/api/v1/local_catalog/" + catalogId + "/save_form", myForm, function() {
-							location.href = "/local_catalog";
+							location.href = "/indicators#catalog";
 						});
 					}
 					else {
@@ -386,7 +386,7 @@
 						myForm.append("rule", JSON.stringify(data));
 
 						hxtool_ajax_post_request("/api/v1/local_catalog/new", myForm, function() {
-							location.href = "/local_catalog";
+							location.href = "/indicators#catalog";
 						});
 					}
 					else {

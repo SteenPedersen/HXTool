@@ -245,12 +245,68 @@ function escHtml(s) {
 	return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// Line-prefix overrides: "url,", "filename,", "domain,", "md5,", "sha1,", "sha256," etc.
+// force the value on the line to be classified as a specific IOC type. The value is the
+// field up to the NEXT comma; anything after that comma is treated as a comment and ignored.
+var HUNT_FORCE_PREFIX = {
+	'url':            'url',
+	'filename':       'process',
+	'file_path_name': 'process',
+	'file_path':      'process',
+	'file':           'process',
+	'domain':         'dns',
+	'dns':            'dns',
+	'md5':            'md5',
+	'sha1':           'sha1',
+	'sha256':         'sha256'
+};
+var HUNT_FORCE_RE = /^(\s*(url|filename|file_path_name|file_path|file|domain|dns|md5|sha256|sha1)\s*,\s*)(.*)$/i;
+
 function parseHuntFreeText(text) {
 	var results = [];
 	var lines = text.split('\n');
 	for (var li = 0; li < lines.length; li++) {
 		var line = lines[li];
 		var covered = [];
+
+		// Check for a forced-type prefix at the start of the line
+		var pm = HUNT_FORCE_RE.exec(line);
+		if (pm) {
+			var forcedId = HUNT_FORCE_PREFIX[pm[2].toLowerCase()];
+			var forcedHt = HUNT_TYPES.find(function(t){ return t.id === forcedId; });
+			if (forcedHt) {
+				var offset    = pm[1].length;       // where the value part starts
+				// Value is only the field up to the next comma; the rest is a comment.
+				var afterPrefix = pm[3];
+				var commaIdx    = afterPrefix.indexOf(',');
+				var valueField  = commaIdx >= 0 ? afterPrefix.slice(0, commaIdx) : afterPrefix;
+				var fnF = HUNT_NORMALIZERS[forcedHt.normalizer] || HUNT_NORMALIZERS['none'];
+				var found = false;
+				for (var fri = 0; fri < (forcedHt.regexes || []).length; fri++) {
+					var frx = new RegExp(forcedHt.regexes[fri], 'g'), fmm;
+					while ((fmm = frx.exec(valueField)) !== null) {
+						var fs = offset + fmm.index, fe = offset + fmm.index + fmm[0].length;
+						if (!covered.some(function(r){ return fs < r.e && fe > r.s; })) {
+							var fraw = fmm[1] !== undefined ? fmm[1] : fmm[0];
+							results.push({ typeId: forcedHt.id, typeName: forcedHt.name, raw: fraw, normalized: fnF(fraw), lineIdx: li, start: fs, end: fe });
+							covered.push({ s: fs, e: fe });
+							found = true;
+						}
+					}
+				}
+				// No regex match — take the whole trimmed value field as the forced value
+				if (!found) {
+					var trimmed = valueField.replace(/\s+$/, '');
+					var lead = valueField.length - valueField.replace(/^\s+/, '').length;
+					var val = valueField.trim();
+					if (val) {
+						results.push({ typeId: forcedHt.id, typeName: forcedHt.name, raw: val, normalized: fnF(val), lineIdx: li, start: offset + lead, end: offset + trimmed.length });
+					}
+				}
+				continue;   // forced line handled; skip normal auto-detection
+			}
+		}
+
 		for (var ti = 0; ti < HUNT_TYPES.length; ti++) {
 			var ht = HUNT_TYPES[ti];
 			for (var ri = 0; ri < (ht.regexes || []).length; ri++) {
@@ -375,10 +431,28 @@ function submitHunt() {
 		contentType: 'application/json', data: JSON.stringify(payload),
 		success: function(resp) {
 			$('#hunt-submit-btn').prop('disabled', false).html('<i class="fas fa-rocket fe-icon--left"></i>Hunt');
-			var s = resp.created !== 1 ? 'es' : '';
-			var msg = '<strong>' + resp.created + ' hunt search' + s + ' submitted.</strong>';
-			if (resp.failed && resp.failed.length)
-				msg += ' <span style="color:#ea475b;">(' + resp.failed.join(', ') + ' had no matching HX fields)</span>';
+			var results = resp.results || [];
+			var okCount = resp.created || 0;
+			var failCount = results.length - okCount;
+			var msg = '<strong>' + okCount + ' hunt search' + (okCount !== 1 ? 'es' : '') + ' submitted'
+				+ (failCount ? ', ' + failCount + ' failed' : '') + '.</strong>';
+			if (results.length) {
+				msg += '<div style="margin-top:8px; font-size:12px;">';
+				results.forEach(function(r) {
+					var ht = HUNT_TYPES.find(function(t){ return t.id === r.typeId; });
+					var name = ht ? ht.name : (r.typeId || '').toUpperCase();
+					if (r.ok) {
+						msg += '<div style="color:#11a962; margin-bottom:3px;">&#10003; ' + escHtml(name)
+							+ (r.scheduled ? ' <span style="color:#6b8fa8;">(scheduled)</span>' : '')
+							+ (r.search_id ? ' <span style="color:#6b8fa8;">&mdash; search #' + escHtml(String(r.search_id)) + '</span>' : '')
+							+ '</div>';
+					} else {
+						msg += '<div style="color:#ea475b; margin-bottom:3px;">&#10007; ' + escHtml(name)
+							+ ': <span style="color:#f0a0a8;">' + escHtml(r.error || 'submission failed') + '</span></div>';
+					}
+				});
+				msg += '</div>';
+			}
 			$('#hxtoolMessageBody').html(msg);
 			$('#hxtoolMessage').show();
 		},
@@ -448,6 +522,7 @@ function openPreviewModal() {
 			+ 'No IOCs selected. Paste indicators into the text area, click <strong>Parse IOCs</strong>, then try again.'
 			+ '</div>';
 	} else {
+		// One search per IOC type — HX cannot combine different field item-types in one search.
 		typeIds.forEach(function(typeId) {
 			var values = groups[typeId];
 			var ht = HUNT_TYPES.find(function(t) { return t.id === typeId; });
@@ -455,7 +530,6 @@ function openPreviewModal() {
 			var color = getTypeColor(typeId);
 			var displayname = 'HUNT_' + typeId + '_' + ts;
 			var query = buildQueryArray(typeId, values);
-
 			var payload = {
 				host_set: { _id: parseInt(hostsetId) || 0 },
 				displayname: displayname,
@@ -464,23 +538,18 @@ function openPreviewModal() {
 			var payloadStr = JSON.stringify(payload, null, 2);
 
 			html += '<div class="api-card" style="border-left: 3px solid ' + color + ';">';
-
-			// Header row
 			html += '<div class="api-card-hdr">';
 			html += '<span class="api-card-method">POST</span>';
 			html += '<span class="api-card-url">/hx/api/v3/searches</span>';
 			html += '<span class="api-card-type-badge" style="background:' + color + '22; color:' + color + '; border:1px solid ' + color + ';">'
 				+ escHtml(typeName) + ' &bull; ' + values.length + ' value' + (values.length !== 1 ? 's' : '') + '</span>';
 			html += '</div>';
-
-			// JSON body
 			html += '<div class="api-card-body">';
 			html += '<div style="font-size:10px; color:#4a6070; margin-bottom:4px; font-weight:600; letter-spacing:.05em;">REQUEST BODY</div>';
 			html += '<pre class="api-json-block">' + formatJsonHighlighted(payload) + '</pre>';
 			html += '<button class="fe-btn fe-btn--sm fe-btn--secondary api-copy-btn" data-payload="' + escHtml(payloadStr) + '">'
 				+ '<i class="fas fa-copy fe-icon--left"></i>Copy payload</button>';
 			html += '</div>';
-
 			html += '</div>';
 		});
 
@@ -488,7 +557,8 @@ function openPreviewModal() {
 		html += '<div style="font-size:11px; color:#4a6070; margin-top:4px; padding: 0 2px;">'
 			+ '<i class="fas fa-info-circle" style="margin-right:4px;"></i>'
 			+ typeIds.length + ' search request' + (typeIds.length !== 1 ? 's' : '')
-			+ ' will be submitted to <strong style="color:#6b8fa8;">' + escHtml(hostsetName) + '</strong> (host_set._id&nbsp;=&nbsp;' + (parseInt(hostsetId)||0) + ').'
+			+ ' (one per IOC type) will be submitted to <strong style="color:#6b8fa8;">' + escHtml(hostsetName)
+			+ '</strong> (host_set._id&nbsp;=&nbsp;' + (parseInt(hostsetId)||0) + ').'
 			+ ' Click <strong style="color:#c9d8e4;">Hunt</strong> to execute.'
 			+ '</div>';
 	}
@@ -535,6 +605,12 @@ function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 		<div id="hunt-left">
 			<div style="font-size:11px; color:#c9d8e4; margin-bottom:4px;">
 				Paste raw threat intel &mdash; hashes, IPs, domains, URLs, registry keys, file paths, command lines. Mixed content is fine.
+			</div>
+			<div style="font-size:11px; color:#6b8fa8; margin-bottom:6px;">
+				<i class="fas fa-info-circle" style="color:#11a962;"></i>
+				Force a type by prefixing a line: <code style="color:#c9d8e4;">url,</code> <code style="color:#c9d8e4;">domain,</code> <code style="color:#c9d8e4;">filename,</code> <code style="color:#c9d8e4;">file_path_name,</code> <code style="color:#c9d8e4;">md5,</code> <code style="color:#c9d8e4;">sha1,</code> <code style="color:#c9d8e4;">sha256,</code>
+				&mdash; e.g. <code style="color:#c9d8e4;">filename,invoice.pdf</code> is a file, not a domain.
+				A second comma starts a comment: <code style="color:#c9d8e4;">filename,evil.csv,notes here</code> only takes <code style="color:#c9d8e4;">evil.csv</code>.
 			</div>
 
 			<div id="hunt-wrap">

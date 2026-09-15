@@ -20,3 +20,6 @@ bulkdownload/
 
 # Claude Code local session data
 .claude/
+
+# Runtime-generated IOC Hunt field mapping (per-instance)
+ioc_hunt_fields.json

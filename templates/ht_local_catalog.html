@@ -6,6 +6,13 @@
 <style>
 	#catalogTable tbody tr.lc-row-selected td { background-color: rgba(17, 169, 98, 0.12) !important; }
 	#catalogTable tbody tr td:not(:first-child):not(:last-child) { cursor: pointer; }
+	.cat-desc-cell {
+		display: block;
+		max-width: 260px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 </style>
 
 <script>
@@ -74,13 +81,14 @@
 			"ajax": "/api/v1/datatable_local_catalog",
 			"paging":        false,
 			"ordering":      true,
-			"order":         [[2, "asc"], [1, "asc"]],
+			"order":         [[3, "asc"], [1, "asc"]],
 			"info":          false,
 			"searching":     true,
 			"processing":    false,
 			"scrollY":       "calc(100vh - 240px)",
 			"scrollCollapse": true,
 			"scrollX":       true,
+			"autoWidth":     false,
 			"dom": '<"hxtool_datatables_buttons"B>frtip',
 			"buttons": [
 				{ extend: "copy",  className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
@@ -90,17 +98,18 @@
 			"drawCallback": function() {
 			},
 			"columns": [
-				{ title: "",           "data": "local_catalog_id" },
-				{ title: "Name",       "data": "name" },
-				{ title: "Category",   "data": "category" },
-				{ title: "Platforms",  "data": "platforms" },
-				{ title: "Description","data": "description" },
-				{ title: "Presence",   "data": "presence_count" },
-				{ title: "Execution",  "data": "execution_count" },
-				{ title: "Action",     "data": "local_catalog_id" }
+				{ title: "",            "data": "local_catalog_id" },
+				{ title: "Name",        "data": "name" },
+				{ title: "Created",     "data": "create_timestamp" },
+				{ title: "Category",    "data": "category" },
+				{ title: "Platforms",   "data": "platforms" },
+				{ title: "Description", "data": "description" },
+				{ title: "Presence",    "data": "presence_count" },
+				{ title: "Execution",   "data": "execution_count" },
+				{ title: "Action",      "data": "local_catalog_id" }
 			],
 			"columnDefs": [
-				{ "className": "hxtool_table_cell_center", "targets": [2, 3, 4, 5, 6, 7] },
+				{ "className": "hxtool_table_cell_center", "targets": [2, 3, 4, 5, 6, 7, 8] },
 				{
 					"targets": 0,
 					"width": "34px",
@@ -109,13 +118,33 @@
 					}
 				},
 				{
-					"targets": 3,
+					"targets": 2,
+					"width": "130px",
+					render: function(data, type, row) {
+						return data ? datatables_Timestamp(data) : '';
+					}
+				},
+				{
+					"targets": 4,
 					render: function(data, type, row) {
 						return Array.isArray(data) ? data.join(", ") : (data || "");
 					}
 				},
 				{
-					"targets": 7,
+					"targets": 5,
+					"width": "220px",
+					render: function(data, type, row) {
+						if (type !== 'display') return data || '';
+						var full = String(data || '');
+						// Show only the first line, capped at 120 chars; full text in tooltip
+						var line = full.split(/\r?\n/)[0];
+						if (line.length > 120) line = line.slice(0, 120) + '…';
+						var esc = function(s) { return $('<div>').text(s).html(); };
+						return '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:218px" title="' + esc(full).replace(/"/g, '&quot;') + '">' + esc(line) + '</span>';
+					}
+				},
+				{
+					"targets": 8,
 					"width": "280px",
 					render: function(data, type, row) {
 						return "<button style='margin-right:4px;' class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='view' data-id='" + row.local_catalog_id + "'>view<i class='fe-icon--right fas fa-eye'></i></button>"

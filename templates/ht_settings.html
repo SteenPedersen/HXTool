@@ -4,45 +4,18 @@
 {% block content %}
 
 <script>
+$(document).ready(function() {
 
-	$(document).ready(function() {
-
-		$("#unset").click(function() {
-			location.href = "/settings?unset=1";
-		});
-
+	$("#unset").click(function() {
+		location.href = "/settings?unset=1";
 	});
 
+});
 </script>
 
-{{ htPanel.widgetHeader("IOC Hunt — Detection Settings", panelId="hunt-settings-panel", panelIcon="fa-search") }}
-	<div style='font-size: 12px; margin-bottom: 15px; margin-top: 8px;'>
-		Enable or disable IOC types for the Hunt feature. Disabled types will not be detected when parsing indicators on the Hunt page.
-	</div>
-	{% if hunt_settings %}
-	<form method="POST" action="/settings">
-		<input type="hidden" name="settings_action" value="hunt">
-		{% for ht in hunt_settings.all_types %}
-		<div style="border-bottom:1px solid #1e2d38; padding:8px 0; margin-bottom:2px;">
-			<label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; margin-bottom:5px;">
-				<input type="checkbox" name="hunt_enabled_types" value="{{ ht.id }}"
-					{% if ht.id in hunt_settings.enabled_types %}checked{% endif %}>
-				<strong>{{ ht.name }}</strong>
-			</label>
-			<div style="padding-left:22px;">
-				{% for regex in ht.regexes %}
-				<div style="font-family:'Courier New',monospace; font-size:11px; color:#4a9aba; padding:1px 0; overflow-wrap:break-word; word-break:break-all;">{{ regex }}</div>
-				{% endfor %}
-			</div>
-		</div>
-		{% endfor %}
-		<div style="margin-top:14px;">
-			<button type="submit" class="fe-btn fe-btn--sm fe-btn--primary">
-				<i class="fas fa-save fe-icon--left"></i> Save Hunt Settings
-			</button>
-		</div>
-	</form>
-	{% endif %}
+{{ htPanel.widgetHeader("Background processing", panelIcon="fa-table") }}
+	<div style='font-size: 12px; margin-bottom: 15px; margin-top: 8px;'>Enter HX API credentials to use for background processing. This feature is used to post-process acquisitions as they come in (when you are not logged into HXTool). PLEASE NOTE: These credentials are stored in the database encrypted with a key based on the password that you logged in with. If you change your password, you will need to unset and reset these credentials.</div>
+	{% if bgcreds %} {{ bgcreds|safe }} {% endif %}
 	</div>
 {{ htPanel.widgetFooter() }}
 

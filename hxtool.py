@@ -71,6 +71,11 @@ hxtool_vars.app_instance_path = app.root_path
 # Register HXTool API blueprint
 app.register_blueprint(ht_api)
 
+# Make the HXTool version available to every template (e.g. layout.html top nav).
+@app.context_processor
+def inject_hxtool_version():
+	return {'hxtool_version': hxtool_vars.__version__}
+
 
 ### Flask/Jinja Filters
 ####################################
@@ -208,6 +213,12 @@ def hunt(hx_api_object):
 	return render_template('ht_hunt.html', user=session['ht_user'],
 		controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}',
 		hostsets=hostsets)
+
+@app.route('/hunt_fields', methods=['GET'])
+@valid_session_required
+def hunt_fields(hx_api_object):
+	return render_template('ht_hunt_fields.html', user=session['ht_user'],
+		controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}')
 
 @app.route('/searchresult', methods=['GET'])
 @valid_session_required
@@ -557,27 +568,16 @@ def sysinfo(hx_api_object):
 @app.route('/settings', methods=['GET', 'POST'])
 @valid_session_required
 def settings(hx_api_object):
-	from hxtool_hunt import HUNT_TYPES as _ALL_HUNT_TYPES
 	if request.method == 'POST':
-		action = request.form.get('settings_action')
-		if action == 'hunt':
-			enabled = request.form.getlist('hunt_enabled_types')
-			hxtool_global.hxtool_db.huntSettingsSet({'enabled_types': enabled})
-			logger.info(format_activity_log(msg="hunt settings action", action="set", user=session['ht_user'], controller=session['hx_ip']))
-		else:
-			hxtool_global.hxtool_scheduler.add_task_api_session(session['ht_profileid'], hx_api_object.hx_host, hx_api_object.hx_port, request.form.get('bguser'), request.form.get('bgpass'))
-			logger.info(format_activity_log(msg="background processing credentials action", action="set", profile=session['ht_profileid'], user=session['ht_user'], controller=session['hx_ip']))
+		hxtool_global.hxtool_scheduler.add_task_api_session(session['ht_profileid'], hx_api_object.hx_host, hx_api_object.hx_port, request.form.get('bguser'), request.form.get('bgpass'))
+		logger.info(format_activity_log(msg="background processing credentials action", action="set", profile=session['ht_profileid'], user=session['ht_user'], controller=session['hx_ip']))
 	elif request.method == 'GET' and request.args.get('unset') == '1':
 		hxtool_global.hxtool_scheduler.remove_task_api_session(session['ht_profileid'])
 		logger.info(format_activity_log(msg="background processing credentials action", action="delete", user=session['ht_user'], controller=session['hx_ip']))
 		return redirect("/settings", code=302)
 
 	bgcreds = formatProfCredsInfo(hxtool_global.hxtool_db.backgroundProcessorCredentialGet(session['ht_profileid']) is not None)
-	hunt_db = hxtool_global.hxtool_db.huntSettingsGet()
-	default_enabled = [ht['id'] for ht in _ALL_HUNT_TYPES]
-	hunt_settings = {'enabled_types': hunt_db.get('enabled_types', default_enabled), 'all_types': _ALL_HUNT_TYPES}
-
-	return render_template('ht_settings.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', bgcreds=bgcreds, hunt_settings=hunt_settings)
+	return render_template('ht_settings.html', user=session['ht_user'], controller=f'{hx_api_object.hx_host}:{hx_api_object.hx_port}', bgcreds=bgcreds)
 
 
 ### Custom Configuration Channels

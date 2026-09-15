@@ -62,8 +62,6 @@
 
 	/* ── Row selection highlights ─────────────────────────────────────── */
 	#iocTable tbody tr.ioc-row-selected td { background-color: rgba(17, 169, 98, 0.12) !important; }
-	#catalogTable tbody tr.lc-row-selected td { background-color: rgba(17, 169, 98, 0.12) !important; }
-	#catalogTable tbody tr td:not(:first-child):not(:last-child) { cursor: pointer; }
 
 	/* ── Full-viewport flex layout ───────────────────────────────────── */
 	/* Each tab panel fills (100vh − nav − content-pad − tab-bar).
@@ -97,25 +95,107 @@
 		padding-bottom: 8px;
 	}
 	/* DataTables wrapper and scroll container grow */
-	#iocTable_wrapper, #catalogTable_wrapper {
+	#iocTable_wrapper {
 		flex: 1; min-height: 0;
 		display: flex; flex-direction: column;
 	}
-	#iocTable_wrapper .dataTables_scroll,
-	#catalogTable_wrapper .dataTables_scroll {
+	#iocTable_wrapper .dataTables_scroll {
 		flex: 1; min-height: 0;
 		display: flex; flex-direction: column;
 	}
 	/* Fixed header stays its natural height */
-	#iocTable_wrapper .dataTables_scrollHead,
-	#catalogTable_wrapper .dataTables_scrollHead { flex-shrink: 0; }
+	#iocTable_wrapper .dataTables_scrollHead { flex-shrink: 0; }
 	/* JS (setScrollBodyH) sets an explicit pixel height so overflow-y triggers a scrollbar.
 	   overflow-y: auto !important beats any DataTables inline override. */
-	#iocTable_wrapper .dataTables_scrollBody,
-	#catalogTable_wrapper .dataTables_scrollBody {
+	#iocTable_wrapper .dataTables_scrollBody {
 		overflow-y: auto !important;
 		overflow-x: auto !important;
 	}
+
+	/* ── Local Catalog Tree View ──────────────────────────────────────────── */
+	#catalogTree { overflow-y: auto; overflow-x: auto; /* height set by JS */ }
+	.lc-catalog-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+	.lc-catalog-table thead th {
+		position: sticky; top: 0; z-index: 1;
+		background: #0d1c28;
+		padding: 6px 8px;
+		font-size: 11px; font-weight: 700; color: #6b8fa8;
+		text-align: left;
+		border-bottom: 1px solid rgba(255,255,255,0.09);
+		white-space: nowrap; user-select: none;
+	}
+	.lc-catalog-table thead th.lc-th-center { text-align: center; }
+	/* Group header row */
+	.lc-group-header-row > td {
+		padding: 0;
+		background: rgba(17,169,98,0.08);
+		border-top: 1px solid rgba(17,169,98,0.18);
+		border-bottom: 1px solid rgba(17,169,98,0.18);
+		cursor: pointer; user-select: none;
+		transition: background 0.15s;
+	}
+	.lc-group-header-row:hover > td { background: rgba(17,169,98,0.14); }
+	.lc-group-header-row.lc-drop-target > td {
+		background: rgba(17,169,98,0.30) !important;
+		border-color: #11a962 !important;
+	}
+	.lc-group-cell {
+		display: flex; align-items: center; gap: 8px;
+		padding: 6px 10px;
+	}
+	.lc-chevron { color: #11a962; font-size: 11px; width: 12px; flex-shrink: 0; }
+	.lc-group-name { font-weight: 700; font-size: 13px; color: #c9d8e4; flex: 1; }
+	.lc-group-count { font-size: 11px; color: #6b8fa8; }
+	.lc-group-del {
+		padding: 2px 7px !important; font-size: 11px !important;
+		opacity: 0; transition: opacity 0.15s;
+	}
+	.lc-group-header-row:hover .lc-group-del { opacity: 1; }
+	/* Rule rows */
+	.lc-rule-row > td {
+		padding: 5px 8px;
+		border-bottom: 1px solid rgba(255,255,255,0.04);
+		font-size: 12px; color: #c9d8e4;
+		vertical-align: middle;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.lc-rule-row:hover > td { background: rgba(255,255,255,0.03); }
+	.lc-rule-row.lc-selected > td { background: rgba(17,169,98,0.1) !important; }
+	.lc-rule-row.lc-dragging > td { opacity: 0.4; }
+	.lc-drag-handle { cursor: grab; color: rgba(255,255,255,0.18); font-size: 12px; }
+	.lc-drag-handle:hover { color: rgba(255,255,255,0.5); }
+	.lc-rule-row > td.lc-td-drag { width: 22px; text-align: center; padding: 0 4px; }
+	.lc-rule-row > td.lc-td-check { width: 26px; text-align: center; padding: 0 4px; }
+	.lc-rule-row > td.lc-td-name { font-weight: 600; width: 300px; max-width: 300px; }
+	.lc-rule-row > td.lc-td-created { color: #6b8fa8; font-size: 11px; white-space: nowrap; }
+	.lc-rule-row > td.lc-td-plat { width: 90px; }
+	.lc-rule-row > td.lc-td-desc { color: rgba(255,255,255,0.38); max-width: 400px; }
+	.lc-rule-row > td.lc-td-count { width: 36px; text-align: center; color: #6b8fa8; }
+	.lc-rule-row > td.lc-td-actions { white-space: nowrap; }
+	.lc-rule-plat {
+		background: rgba(17,169,98,0.1); border: 1px solid rgba(17,169,98,0.2);
+		border-radius: 3px; padding: 1px 5px; font-size: 10px; color: #11a962;
+	}
+	/* Empty-group drop zone row */
+	.lc-empty-row > td {
+		text-align: center; color: rgba(255,255,255,0.2); font-size: 12px;
+		padding: 10px; border: 2px dashed rgba(255,255,255,0.07);
+	}
+	.lc-group-body-tbody.lc-drop-active > tr > td { background: rgba(17,169,98,0.04); }
+	/* Match the Server Rules DataTables search box (.fe-input + .dataTables_filter input) */
+	.lc-filter-input {
+		background-color: rgba(255,255,255,0.2);
+		border: 1px solid rgba(190,190,190,0.5);
+		font-size: 12px; line-height: 16px; font-weight: bold;
+		padding: 4px; box-sizing: border-box;
+		color: rgba(255,255,255,0.9); width: 360px;
+	}
+	.lc-filter-input:focus { outline: none; }
+	.lc-filter-label { font-size: 14px; font-weight: bold; }
+	.lc-catalog-table thead th[data-sort] { cursor: pointer; }
+	.lc-catalog-table thead th[data-sort]:hover { color: #c9d8e4; }
+	.lc-catalog-table thead th.lc-sort-asc::after  { content: ' ▲'; color: #11a962; font-size: 9px; vertical-align: middle; }
+	.lc-catalog-table thead th.lc-sort-desc::after { content: ' ▼'; color: #11a962; font-size: 9px; vertical-align: middle; }
 
 	/* ── Top error banner ─────────────────────────────────────────────── */
 	#ht-banner {
@@ -138,6 +218,138 @@
 	}
 	#ht-banner-close:hover { opacity: 1; }
 
+	/* ── View rule floating panel ────────────────────────────────────── */
+	#ruleViewPopup {
+		position: fixed;
+		top: 80px;
+		right: 32px;
+		width: 540px;
+		max-height: 78vh;
+		z-index: 9000;
+		background: #1e2330;
+		border: 1px solid rgba(17,169,98,0.35);
+		border-radius: 6px;
+		box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+		overflow: hidden;
+	}
+	#ruleViewFloat-inner {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		max-height: 78vh;
+	}
+	#ruleViewFloat-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px 14px;
+		background: rgba(17,169,98,0.12);
+		border-bottom: 1px solid rgba(17,169,98,0.25);
+		border-radius: 6px 6px 0 0;
+		cursor: move;
+		flex-shrink: 0;
+		user-select: none;
+	}
+	#ruleViewFloat-header .rvf-title {
+		font-weight: 700;
+		font-size: 12px;
+		letter-spacing: 0.1em;
+		color: #11a962;
+		text-transform: uppercase;
+	}
+	#ruleViewDismiss {
+		background: none;
+		border: none;
+		color: rgba(255,255,255,0.45);
+		font-size: 20px;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0 4px;
+	}
+	#ruleViewDismiss:hover { color: #fff; }
+	#ruleViewPopup .fe-modal__body {
+		overflow-y: auto;
+		padding: 16px;
+		flex: 1;
+		min-height: 0;
+	}
+
+/* ── LC Hunt preview modal ─────────────────────────────────────── */
+#lcHuntPreview {
+	display: none;
+	position: fixed; inset: 0; z-index: 10000;
+	background: rgba(0,0,0,0.65);
+	align-items: center; justify-content: center;
+}
+#lcHuntPreview.open { display: flex; }
+#lcHuntPreviewBox {
+	background: #1a2236;
+	border: 1px solid rgba(255,255,255,0.1);
+	border-radius: 6px;
+	width: min(860px, 95vw);
+	max-height: 80vh;
+	display: flex; flex-direction: column;
+	overflow: hidden;
+}
+#lcHuntPreviewHdr {
+	display: flex; align-items: center; gap: 8px;
+	padding: 10px 14px;
+	border-bottom: 1px solid rgba(255,255,255,0.08);
+	background: #151d2e;
+	flex-shrink: 0;
+}
+#lcHuntPreviewBody { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.lch-card {
+	background: #0d1525;
+	border: 1px solid rgba(255,255,255,0.08);
+	border-left-width: 3px;
+	border-radius: 4px;
+	margin-bottom: 12px;
+}
+.lch-card-hdr {
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid rgba(255,255,255,0.06);
+	font-size: 12px;
+}
+.lch-card-method {
+	background: #1e7fcb22; color: #4fc3f7;
+	border: 1px solid #4fc3f744;
+	border-radius: 3px; padding: 1px 6px;
+	font-weight: 700; font-size: 11px;
+}
+.lch-card-url { color: #c9d8e4; font-family: monospace; font-size: 12px; }
+.lch-card-name {
+	margin-left: auto;
+	background: #11a96222; color: #4caf50;
+	border: 1px solid #11a96244;
+	border-radius: 3px; padding: 1px 8px;
+	font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+}
+.lch-card-body { padding: 10px 12px; }
+.lch-xml-block {
+	background: #0a1020; border: 1px solid rgba(255,255,255,0.07);
+	border-radius: 3px; padding: 10px 12px;
+	font-size: 10.5px; font-family: monospace; color: #a0b8c8;
+	overflow-x: auto; white-space: pre; max-height: 240px; overflow-y: auto;
+	margin: 6px 0;
+}
+.lch-copy-btn {
+	margin-top: 4px; font-size: 11px;
+	background: rgba(255,255,255,0.12) !important;
+	color: #c9d8e4 !important;
+	border: 1px solid rgba(255,255,255,0.25) !important;
+}
+.lch-copy-btn:hover {
+	background: rgba(255,255,255,0.22) !important;
+	color: #ffffff !important;
+}
+.lch-err-card {
+	background: #1a0d0d; border: 1px solid #ea475b44;
+	border-left: 3px solid #ea475b;
+	border-radius: 4px; padding: 10px 14px;
+	font-size: 12px; color: #ea475b; margin-bottom: 10px;
+}
 </style>
 
 <script>
@@ -200,35 +412,21 @@
 		$("#" + containerId).html(r);
 	}
 
+	var _lcAllRules = [];
+	var _lcGroupNames = [];
+	var _lcSortCol = '';     // 'name'|'created'|'platforms'|'desc'|'pcount'|'ecount'
+	var _lcSortDir = 'asc'; // 'asc'|'desc'
+
 	function lcGetSelectedIds() {
 		var ids = [];
-		catalog_datatable.rows().eq(0).each(function(index) {
-			var row = catalog_datatable.row(index);
-			if ($("#" + row.data().local_catalog_id + "_check").is(":checked")) {
-				ids.push(row.data().local_catalog_id);
-			}
+		_lcAllRules.forEach(function(rule) {
+			var chk = document.getElementById(rule.local_catalog_id + '_check');
+			if (chk && chk.checked) ids.push(rule.local_catalog_id);
 		});
 		return ids;
 	}
 
-	function lcSyncSelectAll(api) {
-		var total = 0, checked = 0;
-		api.rows().eq(0).each(function(index) {
-			var data = api.row(index).data();
-			if (!data) return;
-			total++;
-			if ($("#" + data.local_catalog_id + "_check").is(":checked")) checked++;
-		});
-		var hdrChk = document.getElementById("selectAllCatalogCheck");
-		if (!hdrChk) return;
-		if (checked === 0) {
-			hdrChk.indeterminate = false; hdrChk.checked = false;
-		} else if (checked === total) {
-			hdrChk.indeterminate = false; hdrChk.checked = true;
-		} else {
-			hdrChk.indeterminate = true;
-		}
-	}
+	function lcSyncSelectAll() { /* no-op — no header checkbox in tree view */ }
 
 
 	$(document).ready(function() {
@@ -254,10 +452,8 @@
 				$('#tab-server').removeClass('active');
 				$('#tab-catalog').addClass('active');
 				if (!catalogInitialized) {
-					initCatalogTable();
+					initCatalogTree();
 					catalogInitialized = true;
-				} else if (typeof catalog_datatable !== 'undefined' && catalog_datatable) {
-					catalog_datatable.columns.adjust().draw(false);
 				}
 				history.replaceState(null, '', window.location.pathname + '#catalog');
 			} else {
@@ -306,11 +502,21 @@
 				setTimeout(function() {
 					if (typeof ioc_datatable !== 'undefined' && ioc_datatable)
 						setScrollBodyH(ioc_datatable, document.getElementById('panel-server'));
-					var cp = document.getElementById('panel-catalog');
-					if (typeof catalog_datatable !== 'undefined' && catalog_datatable && cp && cp.style.display !== 'none')
-						setScrollBodyH(catalog_datatable, cp);
+					if (catalogInitialized) resizeCatalogTree();
 				}, 50);
 			}).observe(_contentEl, { attributes: true, attributeFilter: ['style'] });
+		}
+
+		function resizeCatalogTree() {
+			var el = document.getElementById('catalogTree');
+			if (!el || !$(el).is(':visible')) return;
+			var zoom = parseFloat((document.querySelector('.hxtool5_content') || {}).style.zoom) || 1.0;
+			var panelEl = document.getElementById('panel-catalog');
+			if (!panelEl) return;
+			var panelBottom = panelEl.getBoundingClientRect().bottom;
+			var top         = el.getBoundingClientRect().top;
+			if (panelBottom <= 0 || top <= 0) return;
+			el.style.height = Math.max(80, Math.floor((panelBottom - top - 4) / zoom)) + 'px';
 		}
 
 		$(window).on('resize.ht', function() {
@@ -319,20 +525,106 @@
 				ioc_datatable.columns.adjust();
 				setScrollBodyH(ioc_datatable, document.getElementById('panel-server'));
 			}
-			if (typeof catalog_datatable !== 'undefined' && catalog_datatable) {
-				catalog_datatable.columns.adjust();
-				var cp = document.getElementById('panel-catalog');
-				if (cp && cp.style.display !== 'none')
-					setScrollBodyH(catalog_datatable, cp);
-			}
+			if (catalogInitialized) resizeCatalogTree();
 		});
+
+		// ── Open server rule in floating panel ───────────────────────────
+		function openServerRuleView(rowData) {
+			var body = $("#ruleViewPopup").find(".fe-modal__body");
+			body.html("<p style='color:rgba(255,255,255,0.4);font-size:12px;'>Loading…</p>");
+			$("#ruleViewPopup").show();
+
+			var metaHtml = "<div style='margin-bottom:12px;'>";
+			if (rowData.display_name) metaHtml += "<p style='font-weight:bold; font-size:15px; margin-bottom:4px;'>" + $("<div>").text(rowData.display_name).html() + "</p>";
+			if (rowData.description) metaHtml += "<p style='color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:4px;'>" + $("<div>").text(rowData.description).html() + "</p>";
+			metaHtml += "<p style='color:rgba(255,255,255,0.45); font-size:11px;'>" + $("<div>").text(rowData.category_name).html() + " &bull; " + (rowData.platforms || []).join(", ") + "</p>";
+			metaHtml += "</div>";
+
+			hxtool_ajax_get_request("/api/v1/indicators/get/conditions", "uuid=" + (rowData.DT_RowId || '') + "&url=" + encodeURIComponent(rowData.url), function(myConditionsResponse) {
+				body.html("");
+
+				if (!myConditionsResponse['api_success']) {
+					var errData = {};
+					try { errData = JSON.parse(myConditionsResponse['api_response']); } catch(e) {}
+
+					var details = [];
+					try {
+						var hxErr = errData['hx_error'] || {};
+						var src = hxErr['presence'] || hxErr['execution'] || hxErr;
+						(src['details'] || []).forEach(function(d) { details.push('Code ' + d['code'] + ': ' + d['message']); });
+					} catch(e) {}
+
+					var html = metaHtml
+						+ "<p style='color:#ea475b; font-weight:bold; margin-bottom:8px;'>&#9888; Access denied</p>"
+						+ "<p style='margin-bottom:12px;'>" + $('<div>').text(errData['message'] || 'Could not load rule conditions.').html() + "</p>";
+					if (errData['hx_api_endpoint']) {
+						html += "<table style='font-size:12px; color:rgba(255,255,255,0.55); border-collapse:collapse; width:100%;'>"
+							+ "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top;'>HX API endpoint</td>"
+							+ "<td style='padding:2px 0; font-family:monospace;'>" + errData['hx_api_endpoint'] + "</td></tr>"
+							+ "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap;'>HTTP status</td>"
+							+ "<td style='padding:2px 0;'>" + (errData['hx_response_code'] || myConditionsResponse['api_response_code']) + "</td></tr>";
+						if (details.length) {
+							html += "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top;'>HX error</td>"
+								+ "<td style='padding:2px 0;'>" + details.join('<br>') + "</td></tr>";
+						}
+						html += "</table>";
+					}
+					if (errData['role_hint']) {
+						html += "<div style='margin-top:14px; padding:10px 14px; background:rgba(255,193,7,0.12); border-left:4px solid #ffc107; border-radius:3px;'>"
+							+ "<p style='margin:0 0 4px; font-size:12px; font-weight:bold; color:#ffc107; letter-spacing:0.03em;'>&#128274;&nbsp; Required HX User Permissions</p>"
+							+ "<p style='margin:0; font-size:12px; color:rgba(255,255,255,0.85);'>" + $('<div>').text(errData['role_hint']).html() + "</p>"
+							+ "</div>";
+					}
+					var rawJson = JSON.stringify(myConditionsResponse, null, 2);
+					html += "<details style='margin-top:18px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;'>"
+						+ "<summary style='cursor:pointer; font-size:12px; color:rgba(255,255,255,0.45); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;'>"
+						+ "<span class='raw-arrow' style='font-size:10px;'>&#9654;</span> Raw JSON response"
+						+ "</summary>"
+						+ "<pre style='margin-top:10px; font-size:11px; color:rgba(255,255,255,0.65); background:rgba(0,0,0,0.3); border-radius:4px; padding:12px; overflow-x:auto; white-space:pre;'>"
+						+ $('<div>').text(rawJson).html()
+						+ "</pre>"
+						+ "</details></div>";
+					body.html(html);
+					body.find("details").on("toggle", function() {
+						$(this).find(".raw-arrow").html(this.open ? "&#9660;" : "&#9654;");
+					});
+					return;
+				}
+
+				var myConditions = JSON.parse(myConditionsResponse['api_response']);
+				body.html(metaHtml);
+				if (myConditions['presence']['data']['entries'].length > 0) {
+					body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting presence</h3>");
+					generateConditionList(myConditions['presence']['data']['entries'], "presenceList");
+					body.append("<br>");
+				}
+				if (myConditions['execution']['data']['entries'].length > 0) {
+					body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting execution</h3>");
+					generateConditionList(myConditions['execution']['data']['entries'], "executionList");
+				}
+				var rawJson2 = JSON.stringify(myConditions, null, 2);
+				body.append(
+					"<details style='margin-top:18px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;'>"
+					+ "<summary style='cursor:pointer; font-size:12px; color:rgba(255,255,255,0.45); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;'>"
+					+ "<span class='raw-arrow' style='font-size:10px;'>&#9654;</span> Raw JSON response"
+					+ "</summary>"
+					+ "<pre style='margin-top:10px; font-size:11px; color:rgba(255,255,255,0.65); background:rgba(0,0,0,0.3); border-radius:4px; padding:12px; overflow-x:auto; white-space:pre;'>"
+					+ $('<div>').text(rawJson2).html()
+					+ "</pre>"
+					+ "</details>"
+				);
+				body.find("details").on("toggle", function() {
+					$(this).find(".raw-arrow").html(this.open ? "&#9660;" : "&#9654;");
+				});
+			});
+		}
 
 		// ── SERVER RULES ──────────────────────────────────────────────────
 		hxtool_ajax_get_request("/api/v1/indicator_category/get_edit_policies", "", function(myCategoryPolicies) {
 			myEditPolicies = JSON.parse(myCategoryPolicies['api_response']);
 
 			ioc_datatable = $('#iocTable').DataTable( {
-				"ajax": "/api/v1/datatable_indicators",
+				"ajax": { "url": "/api/v1/datatable_indicators", "cache": false },
 				"paging":        false,
 				"ordering":      true,
 				"order":         [[3,"asc"],[1,"asc"],[2,"desc"]],
@@ -483,93 +775,13 @@
 			}
 			if ($(this).data("type") == "view") {
 				var rowData = ioc_datatable.row($(this).closest("tr")).data();
-				hxtool_ajax_get_request("/api/v1/indicators/get/conditions", "uuid=" + $(this).data("id") + "&url=" + encodeURIComponent($(this).data("url")), function(myConditionsResponse) {
-					$("#ruleViewPopup").find(".fe-modal__body").html("");
-
-					var metaHtml = "<div style='margin-bottom:12px;'>";
-					if (rowData.display_name) metaHtml += "<p style='font-weight:bold; font-size:15px; margin-bottom:4px;'>" + $("<div>").text(rowData.display_name).html() + "</p>";
-					if (rowData.description) metaHtml += "<p style='color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:4px;'>" + $("<div>").text(rowData.description).html() + "</p>";
-					metaHtml += "<p style='color:rgba(255,255,255,0.45); font-size:11px;'>" + $("<div>").text(rowData.category_name).html() + " &bull; " + (rowData.platforms || []).join(", ") + "</p>";
-					metaHtml += "</div>";
-
-					if (!myConditionsResponse['api_success']) {
-						var errData = {};
-						try { errData = JSON.parse(myConditionsResponse['api_response']); } catch(e) {}
-
-						var details = [];
-						try {
-							var hxErr = errData['hx_error'] || {};
-							var src = hxErr['presence'] || hxErr['execution'] || hxErr;
-							(src['details'] || []).forEach(function(d) { details.push('Code ' + d['code'] + ': ' + d['message']); });
-						} catch(e) {}
-
-						var html = metaHtml
-							+ "<p style='color:#ea475b; font-weight:bold; margin-bottom:8px;'>&#9888; Access denied</p>"
-							+ "<p style='margin-bottom:12px;'>" + $('<div>').text(errData['message'] || 'Could not load rule conditions.').html() + "</p>";
-						if (errData['hx_api_endpoint']) {
-							html += "<table style='font-size:12px; color:rgba(255,255,255,0.55); border-collapse:collapse; width:100%;'>"
-								+ "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top;'>HX API endpoint</td>"
-								+ "<td style='padding:2px 0; font-family:monospace;'>" + errData['hx_api_endpoint'] + "</td></tr>"
-								+ "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap;'>HTTP status</td>"
-								+ "<td style='padding:2px 0;'>" + (errData['hx_response_code'] || myConditionsResponse['api_response_code']) + "</td></tr>";
-							if (details.length) {
-								html += "<tr><td style='padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top;'>HX error</td>"
-									+ "<td style='padding:2px 0;'>" + details.join('<br>') + "</td></tr>";
-							}
-							html += "</table>";
-						}
-						if (errData['role_hint']) {
-							html += "<div style='margin-top:14px; padding:10px 14px; background:rgba(255,193,7,0.12); border-left:4px solid #ffc107; border-radius:3px;'>"
-								+ "<p style='margin:0 0 4px; font-size:12px; font-weight:bold; color:#ffc107; letter-spacing:0.03em;'>&#128274;&nbsp; Required HX User Permissions</p>"
-								+ "<p style='margin:0; font-size:12px; color:rgba(255,255,255,0.85);'>" + $('<div>').text(errData['role_hint']).html() + "</p>"
-								+ "</div>";
-						}
-						var rawJson = JSON.stringify(myConditionsResponse, null, 2);
-						html += "<details style='margin-top:18px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;'>"
-							+ "<summary style='cursor:pointer; font-size:12px; color:rgba(255,255,255,0.45); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;'>"
-							+ "<span class='raw-arrow' style='font-size:10px;'>&#9654;</span> Raw JSON response"
-							+ "</summary>"
-							+ "<pre style='margin-top:10px; font-size:11px; color:rgba(255,255,255,0.65); background:rgba(0,0,0,0.3); border-radius:4px; padding:12px; overflow-x:auto; white-space:pre;'>"
-							+ $('<div>').text(rawJson).html()
-							+ "</pre>"
-							+ "</details>";
-						html += "</div>";
-						$("#ruleViewPopup").find(".fe-modal__body").html(html);
-						$("#ruleViewPopup").find("details").on("toggle", function() {
-							$(this).find(".raw-arrow").html(this.open ? "&#9660;" : "&#9654;");
-						});
-						$("#ruleViewPopup").show();
-						return;
-					}
-
-					var myConditions = JSON.parse(myConditionsResponse['api_response']);
-					$("#ruleViewPopup").find(".fe-modal__body").prepend(metaHtml);
-					if (myConditions['presence']['data']['entries'].length > 0) {
-						$("#ruleViewPopup").find(".fe-modal__body").append("<h3 class='hxtool_typography_h3'>Conditions for detecting presence</h3>");
-						generateConditionList(myConditions['presence']['data']['entries'], "presenceList");
-						$("#ruleViewPopup").find(".fe-modal__body").append("<br>");
-					}
-					if (myConditions['execution']['data']['entries'].length > 0) {
-						$("#ruleViewPopup").find(".fe-modal__body").append("<h3 class='hxtool_typography_h3'>Conditions for detecting execution</h3>");
-						generateConditionList(myConditions['execution']['data']['entries'], "executionList");
-					}
-					var rawJson = JSON.stringify(myConditions, null, 2);
-					$("#ruleViewPopup").find(".fe-modal__body").append(
-						"<details style='margin-top:18px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;'>"
-						+ "<summary style='cursor:pointer; font-size:12px; color:rgba(255,255,255,0.45); user-select:none; list-style:none; display:flex; align-items:center; gap:6px;'>"
-						+ "<span class='raw-arrow' style='font-size:10px;'>&#9654;</span> Raw JSON response"
-						+ "</summary>"
-						+ "<pre style='margin-top:10px; font-size:11px; color:rgba(255,255,255,0.65); background:rgba(0,0,0,0.3); border-radius:4px; padding:12px; overflow-x:auto; white-space:pre;'>"
-						+ $('<div>').text(rawJson).html()
-						+ "</pre>"
-						+ "</details>"
-					);
-					$("#ruleViewPopup").find("details").on("toggle", function() {
-						$(this).find(".raw-arrow").html(this.open ? "&#9660;" : "&#9654;");
-					});
-					$("#ruleViewPopup").show();
-				});
+				openServerRuleView(rowData);
 			}
+		});
+
+		$("#iocTable").on("click", "tbody tr td:not(:first-child):not(:last-child)", function() {
+			var rowData = ioc_datatable.row($(this).closest("tr")).data();
+			if (rowData) openServerRuleView(rowData);
 		});
 
 		$('#importButton').click(function(){
@@ -746,198 +958,341 @@
 
 
 		// ── LOCAL CATALOG (lazy init on first tab switch) ─────────────────
-		function initCatalogTable() {
-			catalog_datatable = $('#catalogTable').DataTable({
-				"ajax": "/api/v1/datatable_local_catalog",
-				"paging":        false,
-				"ordering":      true,
-				"order":         [[2, "asc"], [1, "asc"]],
-				"info":          false,
-				"searching":     true,
-				"processing":    false,
-				"scrollX":       true,
-				"dom": '<"cat-dt-btns"B><"cat-dt-filter"f>rtip',
-				"buttons": [
-					{ extend: "copy",  className: "fe-btn", "text": "copy<i class='fe-icon--right fas fa-copy'></i>" },
-					{ extend: "csv",   className: "fe-btn", "text": "csv<i class='fe-icon--right fas fa-file'></i>" },
-					{ extend: "excel", className: "fe-btn", "text": "excel<i class='fe-icon--right fas fa-file-excel'></i>" }
-				],
-				"drawCallback": function() {
-					setScrollBodyH(this.api(), document.getElementById('panel-catalog'));
-				},
-				"initComplete": function() {
-					this.api().columns.adjust();
-					setScrollBodyH(this.api(), document.getElementById('panel-catalog'));
-				},
-				"columns": [
-					{ title: "",            "data": "local_catalog_id" },
-					{ title: "Name",        "data": "name" },
-					{ title: "Category",    "data": "category" },
-					{ title: "Platforms",   "data": "platforms" },
-					{ title: "Description", "data": "description" },
-					{ title: "Presence",    "data": "presence_count" },
-					{ title: "Execution",   "data": "execution_count" },
-					{ title: "Created",     "data": "create_timestamp" },
-					{ title: "Action",      "data": "local_catalog_id" }
-				],
-				"columnDefs": [
-					{ "className": "hxtool_table_cell_center", "targets": [2, 3, 5, 6, 7, 8] },
-					{
-						"targets": 0,
-						"width": "34px",
-						render: function(data, type, row) {
-							return "&nbsp;<input id='" + row.local_catalog_id + "_check' type='checkbox' />";
-						}
-					},
-					{
-						"targets": 1,
-						"width": "280px"
-					},
-					{
-						"targets": 2,
-						"width": "1px"		// shrink to content — DT will expand to fit widest cell
-					},
-					{
-						"targets": 3,
-						"width": "1px",		// shrink to content
-						render: function(data, type, row) {
-							return Array.isArray(data) ? data.join(", ") : (data || "");
-						}
-					},
-					{
-						"targets": 4,
-						"width": "300px"
-					},
-					{
-						"targets": 5,
-						"width": "52px"
-					},
-					{
-						"targets": 6,
-						"width": "52px"
-					},
-					{
-						"targets": 7,
-						"width": "160px",
-						render: function(data, type, row) {
-							return data || "";
-						}
-					},
-					{
-						"targets": 8,
-						"width": "280px",
-						render: function(data, type, row) {
-							return "<button style='margin-right:4px;' class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='view' data-id='" + row.local_catalog_id + "'>view<i class='fe-icon--right fas fa-eye'></i></button>"
-								 + "<button style='margin-right:4px;' class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='edit' data-id='" + row.local_catalog_id + "'>edit<i class='fe-icon--right fas fa-edit'></i></button>"
-								 + "<button class='catalogAction fe-btn fe-btn--sm fe-btn--hxtool-main-remove' data-type='remove' data-id='" + row.local_catalog_id + "'>remove<i class='fe-icon--right fas fa-trash'></i></button>";
-						}
-					}
-				]
-			});
-			// Move DT buttons and filter into the catalog toolbar row
-			$('#cat-toolbar-right').append($('.cat-dt-btns').detach());
-			$('#cat-toolbar-right').append($('.cat-dt-filter').detach());
-			$('#cat-toolbar-right .dataTables_filter input').addClass("fe-input");
+		function initCatalogTree() {
+			var _lcDragItems  = [];   // IDs being dragged (one or many when multi-selected)
+			var _lcFilter     = '';
+			var _lcLastChkIdx = -1;   // index into flat visible checkboxes for shift-click
 
-			// Shift+Click selection for catalog
-			$("#catalogTable").on("click", "tbody input[type='checkbox']", function(e) {
-				if (e.shiftKey && lcLastChecked !== null) {
-					var $checks = $("#catalogTable tbody input[type='checkbox']");
-					var start = $checks.index(this);
-					var end = $checks.index(lcLastChecked);
-					var isChecked = $(lcLastChecked).prop("checked");
-					$checks.slice(Math.min(start, end), Math.max(start, end) + 1).each(function() {
-						$(this).prop("checked", isChecked);
-						$(this).closest("tr").toggleClass("lc-row-selected", isChecked);
-					});
-					lcSyncSelectAll(catalog_datatable);
+			function escH(s) {
+				return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+			}
+
+			function lcGetCollapseState() {
+				try { return JSON.parse(localStorage.getItem('lc_collapse_state') || '{}'); } catch(e) { return {}; }
+			}
+			function lcSetCollapseState(group, collapsed) {
+				var s = lcGetCollapseState();
+				if (collapsed) s[group] = true; else delete s[group];
+				try { localStorage.setItem('lc_collapse_state', JSON.stringify(s)); } catch(e) {}
+			}
+
+			function renderRuleRow(rule, gname) {
+				var cid = String(rule.local_catalog_id);
+				var platforms = Array.isArray(rule.platforms) ? rule.platforms.join(', ') : (rule.platforms || '');
+				var created   = (rule.create_timestamp || '').replace('T', ' ').substring(0, 19);
+				var desc = (rule.description || '').split(/\r?\n/)[0];
+				if (desc.length > 100) desc = desc.slice(0, 100) + '…';
+				var platCell = platforms ? "<span class='lc-rule-plat'>" + escH(platforms) + "</span>" : '';
+				return "<tr class='lc-rule-row' draggable='true' data-id='" + escH(cid) + "' data-group='" + escH(gname) + "'>"
+					+ "<td class='lc-td-drag'><i class='lc-drag-handle fas fa-grip-vertical'></i></td>"
+					+ "<td class='lc-td-check'><input type='checkbox' class='lc-rule-check' id='" + escH(cid) + "_check' data-id='" + escH(cid) + "'></td>"
+					+ "<td class='lc-td-name' title='" + escH(rule.name || '') + "'>" + escH(rule.name || '') + "</td>"
+					+ "<td class='lc-td-created'>" + escH(created) + "</td>"
+					+ "<td class='lc-td-plat'>" + platCell + "</td>"
+					+ "<td class='lc-td-desc' title='" + escH(rule.description || '') + "'>" + escH(desc) + "</td>"
+					+ "<td class='lc-td-count'>" + (rule.presence_count  || 0) + "</td>"
+					+ "<td class='lc-td-count'>" + (rule.execution_count || 0) + "</td>"
+					+ "<td class='lc-td-actions'>"
+					+   "<button class='lc-action fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='view' data-id='" + escH(cid) + "'>view<i class='fe-icon--right fas fa-eye'></i></button>"
+					+   "<button class='lc-action fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='edit' data-id='" + escH(cid) + "'>edit<i class='fe-icon--right fas fa-edit'></i></button>"
+					+   "<button class='lc-action fe-btn fe-btn--sm fe-btn--hxtool-main' data-type='hunt' data-id='" + escH(cid) + "'>hunt<i class='fe-icon--right fas fa-crosshairs' style='color:#11a962;'></i></button>"
+					+   "<button class='lc-action fe-btn fe-btn--sm fe-btn--hxtool-main-remove' data-type='remove' data-id='" + escH(cid) + "'>remove<i class='fe-icon--right fas fa-trash'></i></button>"
+					+ "</td></tr>";
+			}
+
+			function renderGroupSection(gname, rules, collapsed) {
+				var chevron = collapsed ? 'fa-chevron-right' : 'fa-chevron-down';
+				var delBtn  = gname !== 'Root'
+					? "<button class='lc-group-del fe-btn fe-btn--sm fe-btn--hxtool-main-remove' data-group='" + escH(gname) + "' title='Delete group — rules move to Root'><i class='fas fa-trash'></i></button>"
+					: '';
+				// Header tbody (one row, always visible)
+				var html = "<tbody class='lc-group-header-tbody'>"
+					+ "<tr class='lc-group-header-row' data-group='" + escH(gname) + "'>"
+					+ "<td colspan='9'>"
+					+ "<div class='lc-group-cell'>"
+					+ "<i class='lc-chevron fas " + chevron + "'></i>"
+					+ "<span class='lc-group-name'>" + escH(gname) + "</span>"
+					+ "<span class='lc-group-count'>" + rules.length + " rule" + (rules.length !== 1 ? 's' : '') + "</span>"
+					+ delBtn
+					+ "</div></td></tr>"
+					+ "</tbody>";
+				// Body tbody (rule rows or empty placeholder — hidden when collapsed)
+				var bodyStyle = collapsed ? " style='display:none'" : '';
+				html += "<tbody class='lc-group-body-tbody' data-group='" + escH(gname) + "'" + bodyStyle + ">";
+				if (rules.length === 0) {
+					html += "<tr class='lc-empty-row' data-group='" + escH(gname) + "'><td colspan='9'>Drop rules here</td></tr>";
 				} else {
-					$(this).closest("tr").toggleClass("lc-row-selected", this.checked);
-					lcSyncSelectAll(catalog_datatable);
+					rules.forEach(function(rule) { html += renderRuleRow(rule, gname); });
 				}
-				lcLastChecked = this;
+				html += "</tbody>";
+				return html;
+			}
+
+			function renderCatalogTree() {
+				var filter = _lcFilter.toLowerCase();
+				var grouped = {};
+				_lcGroupNames.forEach(function(g) { grouped[g] = []; });
+				grouped['Root'] = grouped['Root'] || [];
+				_lcAllRules.forEach(function(rule) {
+					var g = (rule.category || 'Root') || 'Root';
+					grouped[g] = grouped[g] || [];
+					if (filter) {
+						var text = ((rule.name || '') + ' ' + (rule.description || '') + ' ' + (rule.conditions_text || '')).toLowerCase();
+						if (text.indexOf(filter) === -1) return;
+					}
+					grouped[g].push(rule);
+				});
+				var collapseState = lcGetCollapseState();
+				var sortedGroups  = Object.keys(grouped).sort(function(a, b) {
+					if (a === 'Root') return -1;
+					if (b === 'Root') return 1;
+					return a.localeCompare(b);
+				});
+				function lcSortCls(key) { return _lcSortCol === key ? ' lc-sort-' + _lcSortDir : ''; }
+				var thead = "<thead><tr>"
+					+ "<th style='width:22px'></th>"
+					+ "<th style='width:26px'></th>"
+					+ "<th style='width:300px' class='" + lcSortCls('name') + "' data-sort='name'>Name</th>"
+					+ "<th class='" + lcSortCls('created') + "' data-sort='created'>Created</th>"
+					+ "<th style='width:90px' class='" + lcSortCls('platforms') + "' data-sort='platforms'>Platforms</th>"
+					+ "<th class='" + lcSortCls('desc') + "' data-sort='desc'>Description</th>"
+					+ "<th class='lc-th-center" + lcSortCls('pcount') + "' style='width:36px' title='Presence matches' data-sort='pcount'>P</th>"
+					+ "<th class='lc-th-center" + lcSortCls('ecount') + "' style='width:36px' title='Execution matches' data-sort='ecount'>E</th>"
+					+ "<th>Action</th>"
+					+ "</tr></thead>";
+				if (_lcSortCol) {
+					sortedGroups.forEach(function(gname) {
+						grouped[gname].sort(function(a, b) {
+							var av, bv;
+							switch (_lcSortCol) {
+								case 'name':      av = (a.name||'').toLowerCase(); bv = (b.name||'').toLowerCase(); break;
+								case 'created':   av = a.create_timestamp||'';    bv = b.create_timestamp||'';    break;
+								case 'platforms': av = (Array.isArray(a.platforms)?a.platforms.join(','):(a.platforms||'')).toLowerCase();
+								                  bv = (Array.isArray(b.platforms)?b.platforms.join(','):(b.platforms||'')).toLowerCase(); break;
+								case 'desc':      av = (a.description||'').toLowerCase(); bv = (b.description||'').toLowerCase(); break;
+								case 'pcount':    av = a.presence_count||0;  bv = b.presence_count||0;  break;
+								case 'ecount':    av = a.execution_count||0; bv = b.execution_count||0; break;
+								default:          return 0;
+							}
+							if (av < bv) return _lcSortDir === 'asc' ? -1 : 1;
+							if (av > bv) return _lcSortDir === 'asc' ?  1 : -1;
+							return 0;
+						});
+					});
+				}
+				var tbody = '';
+				sortedGroups.forEach(function(gname) {
+					tbody += renderGroupSection(gname, grouped[gname], collapseState[gname] === true);
+				});
+				if (!tbody) {
+					tbody = "<tbody><tr><td colspan='9' style='padding:24px; color:#6b8fa8; text-align:center;'>No rules found.</td></tr></tbody>";
+				}
+				$('#catalogTree').html("<table class='lc-catalog-table hxtool_table'>" + thead + tbody + "</table>");
+				_lcLastChkIdx = -1;
+			}
+
+			function refreshCatalogTree() {
+				$('#catalogTree').html("<div style='padding:24px; color:#6b8fa8; font-size:13px;'>Loading…</div>");
+				$.when(
+					$.getJSON('/api/v1/datatable_local_catalog'),
+					$.getJSON('/api/v1/local_catalog/groups')
+				).done(function(rulesResp, groupsResp) {
+					_lcAllRules   = (rulesResp[0] && rulesResp[0].data) ? rulesResp[0].data : [];
+					_lcGroupNames = groupsResp[0] || [];
+					renderCatalogTree();
+					resizeCatalogTree();
+				}).fail(function() {
+					$('#catalogTree').html("<div style='padding:24px; color:#ea475b;'>Failed to load catalog.</div>");
+				});
+			}
+
+			// ── View rule in floating panel ───────────────────────────────
+			function openCatalogRuleView(cid, rowData) {
+				var body = $("#ruleViewPopup").find(".fe-modal__body");
+				body.html("<p style='color:rgba(255,255,255,0.4);font-size:12px;'>Loading…</p>");
+				var meta = "<div style='margin-bottom:12px;'>";
+				meta += "<p style='font-weight:bold; font-size:15px; margin-bottom:4px;'>" + $("<div>").text(rowData.name).html() + "</p>";
+				if (rowData.description) {
+					meta += "<p style='color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:8px; white-space:pre-wrap;'>" + $("<div>").text(rowData.description).html() + "</p>";
+				}
+				var plats = Array.isArray(rowData.platforms) ? rowData.platforms.join(", ") : (rowData.platforms || "");
+				meta += "<p style='color:rgba(255,255,255,0.45); font-size:11px;'>" + $("<div>").text(rowData.category || 'Root').html() + " &bull; " + plats + "</p>";
+				meta += "</div>";
+				body.html(meta);
+				$.ajax({
+					type: 'GET', url: '/api/v1/local_catalog/' + cid,
+					success: function(entry) {
+						if (entry && entry.presence && entry.presence.length > 0) {
+							body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting presence</h3><div id='lcPresenceList'></div>");
+							generateLocalConditionList(entry.presence, 'lcPresenceList');
+							body.append("<br>");
+						}
+						if (entry && entry.execution && entry.execution.length > 0) {
+							body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting execution</h3><div id='lcExecutionList'></div>");
+							generateLocalConditionList(entry.execution, 'lcExecutionList');
+						}
+						if ((!entry.presence || entry.presence.length === 0) && (!entry.execution || entry.execution.length === 0)) {
+							body.append("<p style='color:rgba(255,255,255,0.4); font-size:13px;'>No conditions stored.</p>");
+						}
+					},
+					error: function() { body.append("<p style='color:#ea475b;'>Could not load rule conditions.</p>"); }
+				});
+				$("#ruleViewPopup").show();
+			}
+
+			// ── Tree event delegation ─────────────────────────────────────
+
+			// Collapse / expand group
+			$('#catalogTree').on('click', '.lc-group-header-row', function(e) {
+				if ($(e.target).closest('.lc-group-del').length) return;
+				var gname = String($(this).data('group'));
+				var nowCollapsed = !$(this).hasClass('lc-collapsed');
+				$(this).toggleClass('lc-collapsed', nowCollapsed);
+				$(this).find('.lc-chevron').first()
+					.toggleClass('fa-chevron-right', nowCollapsed)
+					.toggleClass('fa-chevron-down', !nowCollapsed);
+				$('#catalogTree').find('tbody.lc-group-body-tbody[data-group="' + gname.replace(/"/g, '\\"') + '"]').toggle(!nowCollapsed);
+				lcSetCollapseState(gname, nowCollapsed);
+				_lcLastChkIdx = -1;
 			});
 
-			// Row click toggles checkbox (skip checkbox cell and action cell)
-			$("#catalogTable").on("click", "tbody tr td:not(:first-child):not(:last-child)", function() {
-				var row = $(this).closest("tr");
-				var chk = row.find("td:first-child input[type='checkbox']");
-				chk.prop("checked", !chk.prop("checked"));
-				row.toggleClass("lc-row-selected", chk.prop("checked"));
-				lcSyncSelectAll(catalog_datatable);
-				lcLastChecked = chk[0];
+			// Delete group
+			$('#catalogTree').on('click', '.lc-group-del', function(e) {
+				e.stopPropagation();
+				var gname = $(this).data('group');
+				if (!confirm('Delete group "' + gname + '"?\n\nAll rules in this group will be moved to Root.')) return;
+				$.ajax({
+					type: 'DELETE', url: '/api/v1/local_catalog/groups',
+					contentType: 'application/json',
+					data: JSON.stringify({ name: gname }),
+					success: refreshCatalogTree,
+					error: hxtoolActionFail
+				});
 			});
 
-			// Checkbox direct change (without click propagation)
-			$("#catalogTable").on("change", "tbody input[type='checkbox']", function() {
-				$(this).closest("tr").toggleClass("lc-row-selected", this.checked);
-				lcSyncSelectAll(catalog_datatable);
-			});
-
-			// ── Catalog — row action handler ──────────────────────────────
-			$("#catalogTable").on("click", ".catalogAction", function() {
-				var type = $(this).data("type");
-				var cid  = $(this).data("id");
-
-				if (type === "remove") {
-					var myrow = $(this).closest("tr");
+			// Per-rule action buttons
+			$('#catalogTree').on('click', '.lc-action', function(e) {
+				e.stopPropagation();
+				var type = $(this).data('type');
+				var cid  = String($(this).data('id'));
+				var rule = _lcAllRules.find(function(r) { return String(r.local_catalog_id) === cid; });
+				if (type === 'remove') {
 					$.ajax({
-						type: 'DELETE',
-						url: '/api/v1/local_catalog',
+						type: 'DELETE', url: '/api/v1/local_catalog',
 						contentType: 'application/json',
 						data: JSON.stringify({ ids: [cid] }),
-						success: function() {
-							myrow.fadeOut(200, function() {
-								catalog_datatable.row(myrow).remove().draw();
-							});
-						},
+						success: refreshCatalogTree,
 						error: hxtoolActionFail
 					});
+				} else if (type === 'edit') {
+					location.href = '/local_catalog_edit/' + cid;
+				} else if (type === 'hunt' && rule) {
+					_lcHuntSelectedRows = [{ id: cid, name: rule.name }];
+					openLcHuntModal();
+				} else if (type === 'view' && rule) {
+					openCatalogRuleView(cid, rule);
 				}
+			});
 
-				if (type === "edit") {
-					location.href = "/local_catalog_edit/" + cid;
+			// Sort column header click
+			$('#catalogTree').on('click', 'thead th[data-sort]', function() {
+				var col = $(this).data('sort');
+				if (_lcSortCol === col) {
+					_lcSortDir = _lcSortDir === 'asc' ? 'desc' : 'asc';
+				} else {
+					_lcSortCol = col;
+					_lcSortDir = 'asc';
 				}
+				renderCatalogTree();
+			});
 
-				if (type === "view") {
-					var rowData = catalog_datatable.row($(this).closest("tr")).data();
-					var body = $("#ruleViewPopup").find(".fe-modal__body");
-					body.html("");
+			// Name cell click → open view panel
+			$('#catalogTree').on('click', '.lc-td-name', function() {
+				var cid  = String($(this).closest('.lc-rule-row').data('id'));
+				var rule = _lcAllRules.find(function(r) { return String(r.local_catalog_id) === cid; });
+				if (rule) openCatalogRuleView(cid, rule);
+			});
 
-					var meta = "<div style='margin-bottom:12px;'>";
-					meta += "<p style='font-weight:bold; font-size:15px; margin-bottom:4px;'>" + $("<div>").text(rowData.name).html() + "</p>";
-					if (rowData.description) {
-						meta += "<p style='color:rgba(255,255,255,0.6); font-size:12px; margin-bottom:4px;'>" + $("<div>").text(rowData.description).html() + "</p>";
-					}
-					var plats = Array.isArray(rowData.platforms) ? rowData.platforms.join(", ") : (rowData.platforms || "");
-					meta += "<p style='color:rgba(255,255,255,0.45); font-size:11px;'>" + $("<div>").text(rowData.category).html() + " &bull; " + plats + "</p>";
-					meta += "</div>";
-					body.html(meta);
-
-					$.ajax({
-						type: 'GET',
-						url: '/api/v1/local_catalog/' + cid,
-						success: function(entry) {
-							if (entry && entry.presence && entry.presence.length > 0) {
-								body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting presence</h3><div id='lcPresenceList'></div>");
-								generateLocalConditionList(entry.presence, 'lcPresenceList');
-								body.append("<br>");
-							}
-							if (entry && entry.execution && entry.execution.length > 0) {
-								body.append("<h3 class='hxtool_typography_h3'>Conditions for detecting execution</h3><div id='lcExecutionList'></div>");
-								generateLocalConditionList(entry.execution, 'lcExecutionList');
-							}
-							if ((!entry.presence || entry.presence.length === 0) && (!entry.execution || entry.execution.length === 0)) {
-								body.append("<p style='color:rgba(255,255,255,0.4); font-size:13px;'>No conditions stored.</p>");
-							}
-						},
-						error: function() {
-							body.append("<p style='color:#ea475b;'>Could not load rule conditions.</p>");
-						}
+			// Checkbox click with shift-range support
+			$('#catalogTree').on('click', '.lc-rule-check', function(e) {
+				var $checks = $('#catalogTree .lc-rule-check:visible');
+				var curIdx  = $checks.index(this);
+				var isChecked = this.checked;
+				if (e.shiftKey && _lcLastChkIdx >= 0 && curIdx >= 0 && curIdx !== _lcLastChkIdx) {
+					var lo = Math.min(_lcLastChkIdx, curIdx);
+					var hi = Math.max(_lcLastChkIdx, curIdx);
+					$checks.slice(lo, hi + 1).each(function() {
+						this.checked = isChecked;
+						$(this).closest('.lc-rule-row').toggleClass('lc-selected', isChecked);
 					});
-
-					$("#ruleViewPopup").show();
+				} else {
+					$(this).closest('.lc-rule-row').toggleClass('lc-selected', isChecked);
 				}
+				_lcLastChkIdx = curIdx;
+			});
+
+			// Drag — start: if row is selected carry all selected; otherwise just this row
+			$('#catalogTree').on('dragstart', '.lc-rule-row', function(e) {
+				var $row = $(this);
+				var thisId = String($row.data('id'));
+				var isSelected = $row.hasClass('lc-selected');
+				if (isSelected) {
+					_lcDragItems = [];
+					$('#catalogTree .lc-rule-row.lc-selected').each(function() {
+						_lcDragItems.push({ id: String($(this).data('id')), fromGroup: String($(this).data('group')) });
+						$(this).addClass('lc-dragging');
+					});
+				} else {
+					_lcDragItems = [{ id: thisId, fromGroup: String($row.data('group')) }];
+					$row.addClass('lc-dragging');
+				}
+				e.originalEvent.dataTransfer.effectAllowed = 'move';
+				e.originalEvent.dataTransfer.setData('text/plain', thisId);
+			});
+
+			$('#catalogTree').on('dragend', '.lc-rule-row', function() {
+				$('#catalogTree .lc-dragging').removeClass('lc-dragging');
+				$('#catalogTree .lc-drop-target').removeClass('lc-drop-target');
+				$('#catalogTree .lc-group-body-tbody').removeClass('lc-drop-active');
+			});
+
+			// Drag over group header OR group body tbody
+			$('#catalogTree').on('dragover', '.lc-group-header-row, .lc-group-body-tbody, .lc-empty-row', function(e) {
+				e.preventDefault();
+				e.originalEvent.dataTransfer.dropEffect = 'move';
+				var gname = String($(this).closest('[data-group]').data('group') || $(this).data('group') || '');
+				var $hdr = $('#catalogTree .lc-group-header-row[data-group="' + gname.replace(/"/g, '\\"') + '"]');
+				if (!$hdr.hasClass('lc-drop-target')) {
+					$('#catalogTree .lc-drop-target').removeClass('lc-drop-target');
+					$hdr.addClass('lc-drop-target');
+				}
+			});
+
+			$('#catalogTree').on('dragleave', '.lc-group-header-row, .lc-group-body-tbody, .lc-empty-row', function(e) {
+				var related = e.originalEvent.relatedTarget;
+				if (!related || !$(related).closest('.lc-group-header-row, .lc-group-body-tbody').length) {
+					$('#catalogTree .lc-drop-target').removeClass('lc-drop-target');
+				}
+			});
+
+			$('#catalogTree').on('drop', '.lc-group-header-row, .lc-group-body-tbody, .lc-empty-row', function(e) {
+				e.preventDefault();
+				$('#catalogTree .lc-drop-target').removeClass('lc-drop-target');
+				if (!_lcDragItems.length) return;
+				var toGroup = String($(this).closest('[data-group]').data('group') || $(this).data('group') || '');
+				if (!toGroup) { _lcDragItems = []; return; }
+				// Filter out items already in the target group
+				var toMove = _lcDragItems.filter(function(d) { return d.fromGroup !== toGroup; });
+				_lcDragItems = [];
+				if (!toMove.length) return;
+				var requests = toMove.map(function(d) {
+					return $.ajax({
+						type: 'PATCH', url: '/api/v1/local_catalog/' + d.id + '/group',
+						contentType: 'application/json',
+						data: JSON.stringify({ group: toGroup })
+					});
+				});
+				$.when.apply($, requests).always(refreshCatalogTree);
 			});
 
 			// ── Catalog — Mirror from Controller ──────────────────────────
@@ -950,7 +1305,7 @@
 					contentType: 'application/json',
 					data: JSON.stringify({}),
 					success: function(res) {
-						catalog_datatable.ajax.reload();
+						refreshCatalogTree();
 						var summary = {};
 						try { summary = JSON.parse(res['api_response']); } catch(e) {}
 						var html = "<p style='color:#4caf50; font-weight:bold;'>&#10003; Mirror complete.</p>"
@@ -1046,9 +1401,7 @@
 					url: '/api/v1/local_catalog',
 					contentType: 'application/json',
 					data: JSON.stringify({ ids: ids }),
-					success: function() {
-						catalog_datatable.ajax.reload();
-					},
+					success: refreshCatalogTree,
 					error: hxtoolActionFail
 				});
 			});
@@ -1082,7 +1435,7 @@
 				data.append('platform', 'all');
 
 				hxtool_ajax_post_request("/api/v1/local_catalog/import", data, function(res) {
-					catalog_datatable.ajax.reload();
+					refreshCatalogTree();
 					var summary = {};
 					try { summary = JSON.parse(res['api_response']); } catch(e) {}
 					var imported     = summary.imported      || [];
@@ -1112,25 +1465,128 @@
 
 			// ── Catalog — Hunt ────────────────────────────────────────────
 			var _lcHuntSelectedRows = [];
+			var ES_MAX_SLOTS = 5;
+			var TERMINAL_STATES = ['COMPLETE', 'CANCELLED', 'ABORTED', 'FAILED', 'STOPPED'];
 
-			$("#lcHuntButton").click(function() {
-				_lcHuntSelectedRows = [];
-				catalog_datatable.rows().eq(0).each(function(index) {
-					var d = catalog_datatable.row(index).data();
-					if (d && $("#" + d.local_catalog_id + "_check").is(":checked")) {
-						_lcHuntSelectedRows.push({ id: d.local_catalog_id, name: d.name });
+			function escXml(s) {
+				return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+			}
+
+			function parseOpenIOCConditions(xmlStr) {
+				var groups = [];
+				try {
+					var parser = new DOMParser();
+					var doc = parser.parseFromString(xmlStr, 'text/xml');
+					var topIndicator = doc.querySelector('definition > Indicator');
+					if (!topIndicator) return groups;
+					var andNodes = topIndicator.querySelectorAll(':scope > Indicator');
+					var sets = andNodes.length ? Array.from(andNodes) : [topIndicator];
+					sets.forEach(function(andGroup) {
+						var conditions = [];
+						andGroup.querySelectorAll(':scope > IndicatorItem').forEach(function(item) {
+							var ctx = item.querySelector('Context');
+							var cont = item.querySelector('Content');
+							conditions.push({
+								field:    ctx  ? (ctx.getAttribute('search')  || '') : '',
+								condition: item.getAttribute('condition') || 'is',
+								negate:   item.getAttribute('negate') === 'true',
+								preserveCase: item.getAttribute('preserve-case') === 'true',
+								value:    cont ? cont.textContent : '',
+							});
+						});
+						if (conditions.length) groups.push(conditions);
+					});
+				} catch(e) {}
+				return groups;
+			}
+
+			function renderConditionGroups(groups) {
+				if (!groups.length) return '<em style="color:#6b8fa8; font-size:12px;">No conditions found</em>';
+				var html = '';
+				groups.forEach(function(grp, i) {
+					if (groups.length > 1) {
+						html += "<div style='font-size:10px; color:#4a6070; margin:" + (i ? '8px' : '0') + " 0 4px;'>"
+							+ (i ? '<div style="text-align:center; color:#4a6070; margin-bottom:6px; font-size:11px;">─── OR ───</div>' : '')
+							+ "AND group " + (i + 1) + "</div>";
 					}
+					html += "<table style='width:100%; border-collapse:collapse;'>"
+						+ "<tr><th style='padding:3px 8px; text-align:left; color:#4a6070; font-size:10px; border-bottom:1px solid #1e2e3e; font-weight:600;'>Field</th>"
+						+ "<th style='padding:3px 8px; text-align:left; color:#4a6070; font-size:10px; border-bottom:1px solid #1e2e3e; font-weight:600;'>Condition</th>"
+						+ "<th style='padding:3px 8px; text-align:left; color:#4a6070; font-size:10px; border-bottom:1px solid #1e2e3e; font-weight:600;'>Value</th></tr>";
+					grp.forEach(function(c) {
+						var field = c.field.replace(/^eventItem\//, '');
+						var negBadge = c.negate ? " <span style='background:#ea475b;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;'>NOT</span>" : '';
+						var csBadge  = c.preserveCase ? " <span style='background:#4a6070;color:#c9d8e4;padding:1px 5px;border-radius:3px;font-size:9px;'>CASE</span>" : '';
+						html += "<tr style='border-bottom:1px solid #1a2a3a;'>"
+							+ "<td style='padding:4px 8px; color:#4fc3f7; font-family:monospace; font-size:11px;'>" + escXml(field) + "</td>"
+							+ "<td style='padding:4px 8px; color:#ffb347; font-size:11px;'>" + escXml(c.condition) + negBadge + csBadge + "</td>"
+							+ "<td style='padding:4px 8px; color:#c3e88d; font-family:monospace; font-size:11px; word-break:break-all;'>" + escXml(c.value) + "</td>"
+							+ "</tr>";
+					});
+					html += "</table>";
 				});
-				if (_lcHuntSelectedRows.length === 0) {
-					showHtBanner('No rules selected.');
-					return;
-				}
+				return html;
+			}
+
+			function loadHuntSlotStatus() {
+				var $status = $("#lcHuntSlotStatus");
+				var $submit = $("#lcHuntSubmit");
+				$status.html("<span style='color:#4a6070; font-size:12px;'><i class='fas fa-spinner fa-spin'></i>&nbsp;Checking active searches…</span>");
+				$submit.prop("disabled", true);
+				$.getJSON('/api/v1/datatable_es', function(resp) {
+					var all = resp.data || [];
+					var active = all.filter(function(s) {
+						return TERMINAL_STATES.indexOf((s.state || '').toUpperCase()) === -1;
+					});
+					var slots = active.length;
+					var isFull = slots >= ES_MAX_SLOTS;
+					var slotColor = isFull ? '#ea475b' : slots >= 3 ? '#ffb347' : '#11a962';
+					var html = "<div style='margin-bottom:8px; display:flex; align-items:center; gap:10px;'>"
+						+ "<span style='font-size:12px; color:#6b8fa8;'>Active Enterprise Searches:</span>"
+						+ "<strong style='color:" + slotColor + "; font-size:15px;'>" + slots + "&thinsp;/&thinsp;" + ES_MAX_SLOTS + "</strong>";
+					if (isFull) {
+						html += "<span style='color:#ea475b; font-size:11px;'>&#9888; All slots occupied — stop or remove a search first</span>";
+					}
+					html += "</div>";
+					if (active.length) {
+						html += "<table style='width:100%; border-collapse:collapse; font-size:11px; margin-bottom:4px;'>"
+							+ "<tr><th style='padding:3px 8px; text-align:left; color:#4a6070; font-size:10px; border-bottom:1px solid #1e2e3e;'>Search Name</th>"
+							+ "<th style='padding:3px 8px; text-align:left; color:#4a6070; font-size:10px; border-bottom:1px solid #1e2e3e;'>State</th>"
+							+ "<th style='padding:3px 8px; color:#4a6070; font-size:10px; border-bottom:1px solid #1e2e3e;'></th></tr>";
+						active.forEach(function(s) {
+							html += "<tr style='border-bottom:1px solid #1a2a3a;'>"
+								+ "<td style='padding:4px 8px; color:#c9d8e4;'>" + escXml(s.displayname || 'N/A') + "</td>"
+								+ "<td style='padding:4px 8px; color:#6b8fa8;'>" + escXml(s.state || '') + "</td>"
+								+ "<td style='padding:4px 8px; text-align:right; white-space:nowrap;'>"
+								+ "<button class='fe-btn fe-btn--sm fe-btn--secondary lch-es-stop' data-id='" + s.DT_RowId + "' style='margin-right:4px; font-size:10px; padding:2px 7px;'><i class='fas fa-stop-circle fe-icon--left'></i>Stop</button>"
+								+ "<button class='fe-btn fe-btn--sm fe-btn--hxtool-main-remove lch-es-remove' data-id='" + s.DT_RowId + "' style='font-size:10px; padding:2px 7px;'><i class='fas fa-trash fe-icon--left'></i>Remove</button>"
+								+ "</td></tr>";
+						});
+						html += "</table>";
+					}
+					$status.html(html);
+					$submit.prop("disabled", isFull);
+				}).fail(function() {
+					$status.html("<span style='color:#4a6070; font-size:12px;'>Could not check active searches.</span>");
+					$submit.prop("disabled", false);
+				});
+			}
+
+			function openLcHuntModal() {
 				var html = "";
-				if (_lcHuntSelectedRows.length > 1) {
-					html += "<p style='margin-bottom:6px;'>" + _lcHuntSelectedRows.length + " Enterprise Searches will be created:</p>";
+				var count = _lcHuntSelectedRows.length;
+				if (count > 1) {
+					html += "<p style='margin-bottom:6px; font-size:12px; color:#6b8fa8;'>" + count + " Enterprise Searches will be created — edit names as needed:</p>";
+				} else {
+					html += "<p style='margin-bottom:6px; font-size:12px; color:#6b8fa8;'>Edit search name before submitting:</p>";
 				}
 				html += _lcHuntSelectedRows.map(function(r) {
-					return "<div><strong>HUNT_" + $("<div>").text(r.name).html() + "</strong></div>";
+					return "<div style='margin:4px 0; display:flex; align-items:center; gap:6px;'>"
+						+ "<i class='fas fa-crosshairs' style='color:#11a962; font-size:11px; flex-shrink:0;'></i>"
+						+ "<input class='lch-name-input fe-input' type='text' data-id='" + escXml(String(r.id)) + "'"
+						+ " value='HUNT_" + escXml(r.name) + "'"
+						+ " style='flex:1; font-size:12px; padding:3px 6px; background:#1a2938; color:#c9d8e4; border:1px solid #2d4a63; border-radius:3px;'>"
+						+ "</div>";
 				}).join("");
 				$("#lcHuntNameList").html(html);
 
@@ -1155,10 +1611,65 @@
 						});
 					});
 				}
+				loadHuntSlotStatus();
 				$("#lcHuntPopup").show();
+			}
+
+			$("#lcHuntButton").click(function() {
+				_lcHuntSelectedRows = [];
+				_lcAllRules.forEach(function(rule) {
+					var chk = document.getElementById(String(rule.local_catalog_id) + '_check');
+					if (chk && chk.checked) {
+						_lcHuntSelectedRows.push({ id: rule.local_catalog_id, name: rule.name });
+					}
+				});
+				if (_lcHuntSelectedRows.length === 0) {
+					showHtBanner('No rules selected.');
+					return;
+				}
+				openLcHuntModal();
 			});
 
+			// ── Catalog — New Group ───────────────────────────────────────
+			$('#lcNewGroupButton').click(function() {
+				var name = (prompt('New group name:') || '').trim();
+				if (!name || name === 'Root') return;
+				$.ajax({
+					type: 'POST', url: '/api/v1/local_catalog/groups',
+					contentType: 'application/json',
+					data: JSON.stringify({ name: name }),
+					success: refreshCatalogTree,
+					error: hxtoolActionFail
+				});
+			});
+
+			// ── Catalog — Filter ──────────────────────────────────────────
+			$('#lcFilterInput').on('input', function() {
+				_lcFilter = $(this).val();
+				renderCatalogTree();
+			});
+
+			refreshCatalogTree();
+
 			$("#lcHuntCancel").click(function() { $("#lcHuntPopup").hide(); });
+
+			$(document).on("click", ".lch-es-stop", function() {
+				var id = $(this).data("id");
+				var btn = $(this);
+				btn.prop("disabled", true).html("<i class='fas fa-spinner fa-spin fe-icon--left'></i>Stopping…");
+				$.get("/api/v1/enterprise_search/stop?id=" + id)
+					.done(function() { loadHuntSlotStatus(); })
+					.fail(function() { btn.prop("disabled", false).html("<i class='fas fa-stop-circle fe-icon--left'></i>Stop"); });
+			});
+
+			$(document).on("click", ".lch-es-remove", function() {
+				var id = $(this).data("id");
+				var btn = $(this);
+				btn.prop("disabled", true).html("<i class='fas fa-spinner fa-spin fe-icon--left'></i>Removing…");
+				$.get("/api/v1/enterprise_search/remove?id=" + id)
+					.done(function() { loadHuntSlotStatus(); })
+					.fail(function() { btn.prop("disabled", false).html("<i class='fas fa-trash fe-icon--left'></i>Remove"); });
+			});
 
 			$("#lcHuntSubmit").click(function() {
 				var hostsetId = $("#lcHuntHostset").data("id");
@@ -1167,10 +1678,17 @@
 					return;
 				}
 				var schedule = $("input[name='schedule']:checked").val() || "run_now";
+				var namesMap = {};
+				$(".lch-name-input").each(function() {
+					var lid = $(this).data("id");
+					namesMap[String(lid)] = $(this).val().trim() || ("HUNT_" + lid);
+				});
 				var payload = {
 					ids: _lcHuntSelectedRows.map(function(r) { return r.id; }),
+					names: namesMap,
 					sweephostset: String(hostsetId),
-					schedule: schedule
+					schedule: schedule,
+					exhaustive: $("#lcHuntExhaustive").is(":checked")
 				};
 				if (schedule === "run_at") {
 					payload.run_at_value = $("#run_at_value").val();
@@ -1189,17 +1707,121 @@
 					data: JSON.stringify(payload),
 					success: function(resp) {
 						$("#lcHuntPopup").hide();
-						var msg = "<p style='color:#4caf50; font-weight:bold;'>&#10003; " + resp.created + " Hunt search" + (resp.created !== 1 ? "es" : "") + " submitted.</p>"
-							+ "<p style='font-size:12px;'><a href='/search#enterprise'>View in Enterprise Search</a></p>";
-						if (resp.failed && resp.failed.length) {
-							msg += "<p style='color:#ea475b; font-size:12px;'>" + resp.failed.length + " rule(s) could not be submitted (no conditions).</p>";
+						var results = resp.results || [];
+						var okCount = resp.created || 0;
+						var failCount = results.length - okCount;
+						var msg = "<p style='color:" + (okCount ? "#4caf50" : "#ea475b") + "; font-weight:bold;'>&#10003; "
+							+ okCount + " Hunt search" + (okCount !== 1 ? "es" : "") + " submitted"
+							+ (failCount ? ", " + failCount + " failed" : "") + ".</p>";
+						if (results.length) {
+							msg += "<div style='font-size:12px; margin:6px 0;'>";
+							results.forEach(function(r) {
+								if (r.ok) {
+									msg += "<div style='color:#4caf50; margin-bottom:3px;'>&#10003; " + escXml(r.name)
+										+ (r.scheduled ? " <span style='color:rgba(255,255,255,0.5);'>(scheduled)</span>" : "")
+										+ (r.search_id ? " <span style='color:rgba(255,255,255,0.5);'>&mdash; search #" + escXml(String(r.search_id)) + "</span>" : "")
+										+ "</div>";
+								} else {
+									msg += "<div style='color:#ea475b; margin-bottom:3px;'>&#10007; " + escXml(r.name)
+										+ ": <span style='color:#f0a0a8;'>" + escXml(r.error || "submission failed") + "</span></div>";
+								}
+							});
+							msg += "</div>";
 						}
+						msg += "<p style='font-size:12px;'><a href='/search#enterprise'>View in Enterprise Search</a></p>";
 						$("#hxtoolMessageBody").html(msg);
 						$("#hxtoolMessage").show();
 					},
 					error: hxtoolActionFail,
 					complete: function() { btn.prop("disabled", false).html("<span> Hunt </span>"); }
 				});
+			});
+			// ── Show Hunt Searches ───────────────────────────────────────
+			$("#lcHuntShowBtn").click(function() {
+				if (_lcHuntSelectedRows.length === 0) {
+					showHtBanner('No rules selected.');
+					return;
+				}
+				var hostsetId = $("#lcHuntHostset").data("id");
+				if (!hostsetId || hostsetId === "false") {
+					alert("Please select a host set first.");
+					return;
+				}
+				var body = $("#lcHuntPreviewBody");
+				body.html("<div style='padding:24px; color:#6b8fa8; font-size:13px; text-align:center;'>Loading&hellip;</div>");
+				$("#lcHuntPreview").addClass("open");
+
+				$.ajax({
+					type: "POST",
+					url: "/api/v1/enterprise_search/preview/local_catalog",
+					contentType: "application/json",
+					data: JSON.stringify({
+						ids: _lcHuntSelectedRows.map(function(r) { return r.id; }),
+						sweephostset: String(hostsetId)
+					}),
+					success: function(results) {
+						var html = "";
+						var totalSearches = 0;
+						$.each(results, function(_, r) {
+							if (!r.ok) {
+								html += "<div class='lch-err-card'>&#9888; <strong>" + escXml(r.name) + "</strong> — " + escXml(r.reason) + "</div>";
+								return;
+							}
+							$.each(r.searches, function(_, s) {
+								totalSearches++;
+								var payload = { host_set: s.host_set, displayname: s.displayname, query: s.query || [] };
+								var payloadStr = JSON.stringify(payload, null, 2);
+								html += "<div class='lch-card' style='border-left-color:#11a962;'>";
+								html += "<div class='lch-card-hdr'>";
+								html += "<span class='lch-card-method'>POST</span>";
+								html += "<span class='lch-card-url'>/hx/api/v3/searches</span>";
+								html += "<span class='lch-card-name'><i class='fas fa-crosshairs' style='color:#11a962; margin-right:4px; font-size:10px;'></i>" + escXml(s.displayname) + "</span>";
+								html += "<button class='lch-copy-btn fe-btn fe-btn--sm' data-xml='" + escXml(payloadStr) + "'>"
+									+ "<i class='fas fa-copy fe-icon--left'></i>Copy payload</button>";
+								html += "</div>";
+								html += "<div class='lch-card-body'>";
+								$.each(s.query || [], function(_, q) {
+									html += "<div style='font-size:12px; margin-bottom:3px; color:#c9d8e4;'>"
+										+ "<span style='color:#11a962;'>" + escXml(q.field) + "</span> "
+										+ "<span style='color:#6b8fa8;'>" + escXml(q.operator) + "</span> "
+										+ "<span style='color:#e0e6ed;'>" + escXml(String(q.value)) + "</span></div>";
+								});
+								html += "</div>";
+								html += "</div>";
+							});
+							if (r.unmapped && r.unmapped.length) {
+								html += "<div class='lch-err-card' style='border-left-color:#e0a800;'>&#9888; Skipped unmapped tokens for <strong>"
+									+ escXml(r.name) + "</strong>: " + escXml(r.unmapped.join(', ')) + "</div>";
+							}
+						});
+						if (!html) html = "<div style='padding:24px; color:#6b8fa8; text-align:center;'>No results.</div>";
+						var hostsetName = $("#lcHuntHostset").text().replace(/\s*›.*/, '').trim();
+						html += "<div style='font-size:11px; color:#4a6070; margin-top:4px; padding:0 2px;'>"
+							+ "<i class='fas fa-info-circle' style='margin-right:4px;'></i>"
+							+ totalSearches + " search(es) will be submitted to <strong style='color:#6b8fa8;'>" + escXml(hostsetName) + "</strong>"
+							+ " (host_set._id&nbsp;=&nbsp;" + hostsetId + "). Click <strong style='color:#c9d8e4;'>Hunt</strong> to execute."
+							+ "</div>";
+						body.html(html);
+					},
+					error: function() {
+						body.html("<div style='padding:24px; color:#ea475b; text-align:center;'>Failed to load preview.</div>");
+					}
+				});
+			});
+
+			$("#lcHuntPreviewClose").click(function() { $("#lcHuntPreview").removeClass("open"); });
+			$("#lcHuntPreview").click(function(e) { if (e.target === this) $("#lcHuntPreview").removeClass("open"); });
+			$(document).on("click", ".lch-copy-btn", function() {
+				var xml = $(this).data("xml");
+				if (navigator.clipboard) {
+					navigator.clipboard.writeText(xml);
+				} else {
+					var ta = $("<textarea>").val(xml).appendTo("body");
+					ta[0].select(); document.execCommand("copy"); ta.remove();
+				}
+				var btn = $(this);
+				btn.html("<i class='fas fa-check fe-icon--left'></i>Copied!");
+				setTimeout(function() { btn.html("<i class='fas fa-copy fe-icon--left'></i>Copy XML"); }, 1500);
 			});
 		}
 
@@ -1209,9 +1831,32 @@
 			$("#ruleViewPopup").hide();
 		});
 
-		// Init catalog table if starting on catalog tab
+		// ── Floating panel drag ───────────────────────────────────────────
+		(function() {
+			var panel = document.getElementById('ruleViewPopup');
+			var header = document.getElementById('ruleViewFloat-header');
+			if (!panel || !header) return;
+			var dragging = false, sx, sy, sl, st;
+			header.addEventListener('mousedown', function(e) {
+				if (e.target.id === 'ruleViewDismiss') return;
+				dragging = true;
+				sx = e.clientX; sy = e.clientY;
+				var r = panel.getBoundingClientRect();
+				sl = r.left; st = r.top;
+				panel.style.right = 'auto';
+				e.preventDefault();
+			});
+			document.addEventListener('mousemove', function(e) {
+				if (!dragging) return;
+				panel.style.left = (sl + e.clientX - sx) + 'px';
+				panel.style.top  = (st + e.clientY - sy) + 'px';
+			});
+			document.addEventListener('mouseup', function() { dragging = false; });
+		})();
+
+		// Init catalog tree if starting on catalog tab
 		if (initialTab === 'catalog') {
-			initCatalogTable();
+			initCatalogTree();
 			catalogInitialized = true;
 		}
 
@@ -1289,23 +1934,32 @@
 		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcUploadButton"> Upload selected <i style='color: #11a962;' class="fe-icon--right fas fa-upload"></i></button>
 		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcMirrorButton"> Mirror from Controller <i style='color: #11a962;' class="fe-icon--right fas fa-sync"></i></button>
 		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcHuntButton" title="Enterprise Search"> Hunt <i style='color: #11a962;' class="fe-icon--right fas fa-crosshairs"></i></button>
+		<button class="fe-btn fe-btn--md fe-btn--hxtool-main-master" id="lcNewGroupButton"> New Group <i style='color: #11a962;' class="fe-icon--right fas fa-folder-plus"></i></button>
 	</div>
-	<div class="ht-toolbar-right" id="cat-toolbar-right"></div>
+	<div class="ht-toolbar-right" id="cat-toolbar-right">
+		<label class="lc-filter-label" for="lcFilterInput">Filter:</label>
+		<input id="lcFilterInput" class="lc-filter-input" type="text" placeholder="Search rules…" autocomplete="off">
+	</div>
 </div>
 {{ htPanelNoHeader.widgetFooter() }}
 
 <div style="margin-top:8px">
 {{ htPanelNoHeader.widgetHeader(panelId="catalogTableContainer", panelDisplay="block") }}
-	<table style='width: 100%;' id='catalogTable' class='hxtool_table'></table>
+	<div id='catalogTree'></div>
 {{ htPanelNoHeader.widgetFooter() }}
 </div>
 </div>
 
-<!-- ── Shared: View rule modal ───────────────────────────────────────── -->
-{{ htModal.widgetHeader("View rule", modalId="ruleViewPopup", modalSize="large") }}
-{{ htModal.widgetMiddle() }}
-	<button class="fe-btn fe-btn--md fe-btn--secondary" id="ruleViewDismiss" aria-label="Dismiss"><span> Dismiss </span></button>
-{{ htModal.widgetFooter() }}
+<!-- ── Shared: View rule floating panel ──────────────────────────────── -->
+<div id="ruleViewPopup" style="display:none;">
+	<div id="ruleViewFloat-inner">
+		<div id="ruleViewFloat-header">
+			<span class="rvf-title">View Rule</span>
+			<button id="ruleViewDismiss" aria-label="Close">&times;</button>
+		</div>
+		<div class="fe-modal__body"></div>
+	</div>
+</div>
 
 <!-- ── Server Rules: Import modal ────────────────────────────────────── -->
 {{ htModal.widgetHeader("Import rule(s)", modalId="ruleImportPopup", modalSize="medium") }}
@@ -1342,7 +1996,9 @@
 <!-- ── Local Catalog: Hunt modal ─────────────────────────────────────── -->
 {{ htModal.widgetHeader("Hunt — Enterprise Search", modalId="lcHuntPopup", modalOverflow="true") }}
 	<h3 class='hxtool_typography_h3'>Searches to create</h3>
-	<div id="lcHuntNameList" style="margin-bottom:12px; font-size:13px; color:rgba(255,255,255,0.7);"></div>
+	<div id="lcHuntNameList" style="margin-bottom:12px; font-size:13px;"></div>
+	<h3 class='hxtool_typography_h3 hxtool_typography_underline'>Active Enterprise Searches</h3>
+	<div id="lcHuntSlotStatus" style="margin-bottom:12px; font-size:12px; min-height:24px;"></div>
 	<h3 class='hxtool_typography_h3 hxtool_typography_underline'>Hostset</h3>
 	<div class='hxtool_panel_wrapper'>
 		<div class='fe-dropdown'>
@@ -1354,10 +2010,34 @@
 		<br>
 		<span class="fe-input-hint-text">Select the target host set</span><br>
 	</div>
+	<div class='hxtool_panel_wrapper' style="margin-top:10px;">
+		<label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#c9d8e4; cursor:pointer;">
+			<input type="checkbox" id="lcHuntExhaustive">
+			<span>Exhaustive search <span style="color:#6b8fa8; font-size:11px;">(scan full historical audit data, not just the live event buffer &mdash; slower but finds older activity)</span></span>
+		</label>
+	</div>
 	{{ htSchedule.widgetHeader() }}
 {{ htModal.widgetMiddle() }}
 	<button class="fe-btn fe-btn--md fe-btn--secondary" id="lcHuntCancel" aria-label="Cancel"><span> Cancel </span></button>
+	<button class="fe-btn fe-btn--md fe-btn--secondary" id="lcHuntShowBtn" aria-label="Show Hunt Searches"><i class="fas fa-code fe-icon--left"></i><span> Show Hunt Searches </span></button>
 	<button class="fe-btn fe-btn--md fe-btn--primary" id="lcHuntSubmit" aria-label="Submit"><span> Hunt </span></button>
 {{ htModal.widgetFooter() }}
+
+<!-- ── Local Catalog: Hunt preview modal ──────────────────────────── -->
+<div id="lcHuntPreview">
+	<div id="lcHuntPreviewBox">
+		<div id="lcHuntPreviewHdr">
+			<i class="fas fa-code" style="color:#4fc3f7; font-size:13px;"></i>
+			<span style="font-size:13px; font-weight:700; color:#c9d8e4;">Search API Preview</span>
+			<span style="font-size:11px; color:#4a6070; margin-left:4px;">— payloads that will be sent on Hunt</span>
+			<button id="lcHuntPreviewClose" class="fe-btn fe-btn--sm fe-btn--secondary" style="margin-left:auto; padding:4px 10px;">
+				<i class="fas fa-times"></i>
+			</button>
+		</div>
+		<div id="lcHuntPreviewBody">
+			<div style="padding:24px; color:#6b8fa8; font-size:13px; text-align:center;">Loading…</div>
+		</div>
+	</div>
+</div>
 
 {% endblock %}

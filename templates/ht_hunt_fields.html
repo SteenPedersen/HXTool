@@ -1,0 +1,312 @@
+{% extends "layout.html" %}
+{% block title %}HXTool - IOC Hunt Settings{% endblock %}
+{% block navlocation %}IOC Hunt Settings{% endblock %}
+{% block content %}
+
+<style>
+	/* ── Detection Settings (types + regex) — two columns, full width ─── */
+	#hunt-type-list { display:flex; flex-wrap:wrap; gap:10px; width:100%; align-items:flex-start; }
+	#hunt-type-list .hs-type-card { flex:1 1 calc(50% - 5px); min-width:0; box-sizing:border-box; }
+	@media (max-width:900px) { #hunt-type-list .hs-type-card { flex-basis:100%; } }
+	.hs-type-card { border:1px solid #1e2d38; border-radius:4px; background:#0f1d29; overflow:hidden; }
+	.hs-type-header { display:flex; align-items:center; gap:8px; padding:9px 14px; background:#132031; }
+	.hs-type-name { font-size:15px; font-weight:700; color:#c9d8e4; }
+	.hs-type-id { font-size:12px; color:#4a6070; font-family:'Courier New',monospace; }
+	.hs-type-body { padding:11px 14px 13px; }
+	.hs-toggle { position:relative; display:inline-block; width:34px; height:18px; flex-shrink:0; }
+	.hs-toggle input { opacity:0; width:0; height:0; }
+	.hs-toggle .slider { position:absolute; cursor:pointer; inset:0; background:#263d52; border-radius:18px; transition:.2s; }
+	.hs-toggle .slider:before { content:""; position:absolute; width:12px; height:12px; left:3px; bottom:3px; background:#6b8fa8; border-radius:50%; transition:.2s; }
+	.hs-toggle input:checked + .slider { background:#11a962; }
+	.hs-toggle input:checked + .slider:before { transform:translateX(16px); background:#fff; }
+	.hs-section-label { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#4a6070; margin:10px 0 6px; }
+	.hs-regex-row { display:flex; align-items:center; gap:5px; margin-bottom:6px; }
+	.hs-regex-input { flex:1; min-width:0; font-family:'Courier New',monospace; font-size:13px; color:#4a9aba; background:#0a1520; border:1px solid #1e2d38; border-radius:3px; padding:5px 8px; }
+	.hs-regex-input:focus { outline:none; border-color:#2d6a9f; color:#7ec8e3; }
+	.hs-btn-icon { flex-shrink:0; background:none; border:1px solid #1e2d38; border-radius:3px; color:#6b8fa8; font-size:11px; padding:3px 7px; cursor:pointer; transition:border-color .15s, color .15s; white-space:nowrap; }
+	.hs-btn-icon:hover { border-color:#4a9aba; color:#c9d8e4; }
+	.hs-btn-icon.hs-del:hover { border-color:#ea475b; color:#ea475b; }
+	.hs-add-regex { font-size:11px; color:#11a962; background:none; border:none; cursor:pointer; padding:2px 0; margin-top:2px; }
+	.hs-add-regex:hover { color:#15cc7a; text-decoration:underline; }
+
+	#hs-save-bar, #hf-save-bar { position:sticky; bottom:0; background:#0f1d29; border-top:1px solid #1e2d38; padding:10px 0; margin-top:4px; display:flex; align-items:center; gap:10px; }
+	#hs-save-msg, #hf-save-msg { font-size:12px; }
+	#hs-save-msg.ok, #hf-save-msg.ok { color:#11a962; }
+	#hs-save-msg.err, #hf-save-msg.err { color:#ea475b; }
+
+	/* ── Field Mapping (4-column grid) ──────────────────────────────── */
+	#hf-type-list { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; align-items:start; width:100%; }
+	@media (max-width:1500px) { #hf-type-list { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+	@media (max-width:1100px) { #hf-type-list { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+	@media (max-width:700px)  { #hf-type-list { grid-template-columns:minmax(0, 1fr); } }
+
+	.hf-type-card { border:1px solid #1e2d38; border-radius:4px; background:#0f1d29; overflow:hidden; }
+	.hf-type-header { display:flex; align-items:baseline; gap:6px; padding:8px 12px; background:#132031; }
+	.hf-type-name { font-size:13px; font-weight:700; color:#c9d8e4; }
+	.hf-type-id { font-size:11px; color:#4a6070; font-family:'Courier New',monospace; }
+	.hf-type-body { padding:8px 12px 10px; }
+
+	.hf-row { display:flex; gap:6px; align-items:center; padding:5px 0; border-bottom:1px solid #0d1c27; }
+	.hf-row:last-of-type { border-bottom:none; }
+	.hf-select { font-size:13px; height:30px; line-height:20px; color:#c9d8e4; background:#0a1520; border:1px solid #1e2d38; border-radius:3px; padding:4px 8px; box-sizing:border-box; max-width:100%; }
+	.hf-select:focus { outline:none; border-color:#2d6a9f; }
+	.hf-field-select { flex:1; min-width:0; }
+	.hf-op-select { width:120px; flex-shrink:0; }
+	.hf-del { flex-shrink:0; background:none; border:1px solid #1e2d38; border-radius:3px; color:#6b8fa8; font-size:12px; height:30px; padding:0 9px; cursor:pointer; transition:border-color .15s, color .15s; }
+	.hf-del:hover { border-color:#ea475b; color:#ea475b; }
+	.hf-add-row { font-size:11px; color:#11a962; background:none; border:none; cursor:pointer; padding:4px 0 0; }
+	.hf-add-row:hover { color:#15cc7a; text-decoration:underline; }
+	.hf-empty { font-size:11px; color:#4a6070; font-style:italic; padding:2px 0 4px; }
+</style>
+
+<script>
+$(document).ready(function() {
+
+	function escH(s) {
+		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+	}
+
+	/* ═══════════════ Detection Settings (types + regex) ═══════════════ */
+
+	var _huntDefaults = {};   // id → {regexes}  (original from server)
+
+	function regexRowHtml(typeId, value) {
+		return "<div class='hs-regex-row' data-type='" + escH(typeId) + "'>"
+			+ "<input class='hs-regex-input' type='text' value='" + escH(value) + "' spellcheck='false'>"
+			+ "<button type='button' class='hs-btn-icon hs-clone' title='Duplicate'><i class='far fa-clone'></i></button>"
+			+ "<button type='button' class='hs-btn-icon hs-del' title='Delete'><i class='fas fa-times'></i></button>"
+			+ "</div>";
+	}
+
+	function renderHuntTypes(types) {
+		var html = "";
+		types.forEach(function(ht) {
+			var enabled = ht.enabled !== false;
+			html += "<div class='hs-type-card' data-id='" + escH(ht.id) + "'>"
+				+ "<div class='hs-type-header'>"
+				+ "<label class='hs-toggle'>"
+				+ "<input type='checkbox' class='hs-enabled-chk'" + (enabled ? " checked" : "") + ">"
+				+ "<span class='slider'></span>"
+				+ "</label>"
+				+ "<span class='hs-type-name'>" + escH(ht.name) + "</span>"
+				+ "<span class='hs-type-id'>(" + escH(ht.id) + ")</span>"
+				+ "</div>"
+				+ "<div class='hs-type-body'>"
+				+ "<div class='hs-section-label'><i class='fas fa-filter' style='margin-right:4px;'></i>Detection Regex Patterns</div>"
+				+ "<div class='hs-regex-list'>";
+			(ht.regexes || []).forEach(function(rx) { html += regexRowHtml(ht.id, rx); });
+			html += "</div>"
+				+ "<button type='button' class='hs-add-regex'><i class='fas fa-plus' style='margin-right:4px;'></i>Add regex</button>"
+				+ "</div></div>";
+		});
+		$("#hunt-type-list").html(html);
+	}
+
+	/* delegated handlers — bound once */
+	$("#hunt-type-list").on("click", ".hs-clone", function() {
+		var $row = $(this).closest(".hs-regex-row");
+		$row.after(regexRowHtml($row.data("type"), $row.find(".hs-regex-input").val()));
+	});
+	$("#hunt-type-list").on("click", ".hs-del", function() {
+		var $list = $(this).closest(".hs-regex-list");
+		if ($list.find(".hs-regex-row").length <= 1) { alert("Each type must have at least one regex pattern."); return; }
+		$(this).closest(".hs-regex-row").remove();
+	});
+	$("#hunt-type-list").on("click", ".hs-add-regex", function() {
+		var $card = $(this).closest(".hs-type-card");
+		$card.find(".hs-regex-list").append(regexRowHtml($card.data("id"), ""));
+		$card.find(".hs-regex-list .hs-regex-input").last().focus();
+	});
+
+	function collectHuntPayload() {
+		var enabled_types = [], type_overrides = {};
+		$("#hunt-type-list .hs-type-card").each(function() {
+			var typeId = $(this).data("id");
+			if ($(this).find(".hs-enabled-chk").is(":checked")) enabled_types.push(typeId);
+			var regexes = [];
+			$(this).find(".hs-regex-input").each(function() { var v = $(this).val().trim(); if (v) regexes.push(v); });
+			var defaultRegexes = (_huntDefaults[typeId] || {}).regexes || [];
+			var changed = regexes.length !== defaultRegexes.length || regexes.some(function(r, i) { return r !== defaultRegexes[i]; });
+			if (changed) type_overrides[typeId] = { regexes: regexes };
+		});
+		return { enabled_types: enabled_types, type_overrides: type_overrides };
+	}
+
+	function loadHuntSettings() {
+		$.getJSON('/api/v1/hunt/types?all=1', function(types) {
+			types.forEach(function(ht) { _huntDefaults[ht.id] = { regexes: (ht.regexes || []).slice() }; });
+			renderHuntTypes(types);
+		}).fail(function() {
+			$("#hunt-type-list").html("<span style='color:#ea475b; font-size:12px;'>Failed to load Hunt types from API.</span>");
+		});
+	}
+
+	$("#hs-save-btn").click(function() {
+		var $msg = $("#hs-save-msg"), $btn = $(this);
+		$btn.prop("disabled", true);
+		$msg.text("Saving…").removeClass("ok err");
+		$.ajax({
+			type: "POST", url: "/api/v1/hunt/settings", contentType: "application/json",
+			data: JSON.stringify(collectHuntPayload()),
+			success: function() { $msg.text("Saved.").addClass("ok").removeClass("err"); loadHuntSettings(); },
+			error: function(xhr) { $msg.text("Save failed: " + (xhr.responseText || xhr.status)).addClass("err").removeClass("ok"); },
+			complete: function() { $btn.prop("disabled", false); }
+		});
+	});
+
+	/* ═══════════════ Search Field Mapping (type-aware) ═══════════════ */
+
+	var HF_FIELDS = [];        // searchable field names
+	var HF_TYPES = [];         // [{id, name}]
+	var HF_FIELD_TYPES = {};   // field → data type ('string'|'integer'|'date'|'bool'|'ip')
+	var HF_OPS_BY_TYPE = {};   // data type → [operators]
+
+	function opsForField(field) {
+		var t = HF_FIELD_TYPES[field] || 'string';
+		return HF_OPS_BY_TYPE[t] || HF_OPS_BY_TYPE['string'] || [];
+	}
+
+	function fieldSelect(selected) {
+		var html = "<select class='hf-select hf-field-select'>";
+		HF_FIELDS.forEach(function(f) {
+			html += "<option value='" + escH(f) + "'" + (f === selected ? " selected" : "") + ">" + escH(f) + "</option>";
+		});
+		return html + "</select>";
+	}
+
+	function opSelect(field, selected) {
+		var ops = opsForField(field);
+		if (ops.indexOf(selected) === -1) selected = ops[0];
+		var html = "<select class='hf-select hf-op-select'>";
+		ops.forEach(function(o) {
+			html += "<option value='" + escH(o) + "'" + (o === selected ? " selected" : "") + ">" + escH(o) + "</option>";
+		});
+		return html + "</select>";
+	}
+
+	function rowHtml(field, operator) {
+		if (!field) field = HF_FIELDS[0];
+		return "<div class='hf-row'>"
+			+ fieldSelect(field)
+			+ opSelect(field, operator)
+			+ "<button type='button' class='hf-del' title='Remove field'><i class='fas fa-times'></i></button>"
+			+ "</div>";
+	}
+
+	function renderFieldMap(mappings) {
+		var html = "";
+		HF_TYPES.forEach(function(t) {
+			var rows = mappings[t.id] || [];
+			html += "<div class='hf-type-card' data-id='" + escH(t.id) + "'>"
+				+ "<div class='hf-type-header'>"
+				+ "<span class='hf-type-name'>" + escH(t.name) + "</span>"
+				+ "<span class='hf-type-id'>(" + escH(t.id) + ")</span>"
+				+ "</div>"
+				+ "<div class='hf-type-body'>"
+				+ "<div class='hf-row-list'>";
+			rows.forEach(function(r) { html += rowHtml(r.field, r.operator); });
+			html += "</div>"
+				+ "<div class='hf-empty'" + (rows.length ? " style='display:none;'" : "") + ">No fields — this IOC type is skipped when hunting.</div>"
+				+ "<button type='button' class='hf-add-row'><i class='fas fa-plus' style='margin-right:4px;'></i>Add field</button>"
+				+ "</div></div>";
+		});
+		$("#hf-type-list").html(html);
+	}
+
+	/* delegated handlers — bound once */
+	$("#hf-type-list").on("click", ".hf-add-row", function() {
+		var $card = $(this).closest(".hf-type-card");
+		$card.find(".hf-row-list").append(rowHtml(HF_FIELDS[0], null));
+		$card.find(".hf-empty").hide();
+	});
+	$("#hf-type-list").on("click", ".hf-del", function() {
+		var $card = $(this).closest(".hf-type-card");
+		$(this).closest(".hf-row").remove();
+		if ($card.find(".hf-row").length === 0) $card.find(".hf-empty").show();
+	});
+	/* when the field changes, rebuild the operator list for that field's data type */
+	$("#hf-type-list").on("change", ".hf-field-select", function() {
+		var $row = $(this).closest(".hf-row");
+		var curOp = $row.find(".hf-op-select").val();
+		$row.find(".hf-op-select").replaceWith(opSelect($(this).val(), curOp));
+	});
+
+	function collectFieldMap() {
+		var mappings = {};
+		$("#hf-type-list .hf-type-card").each(function() {
+			var rows = [];
+			$(this).find(".hf-row").each(function() {
+				rows.push({ field: $(this).find(".hf-field-select").val(), operator: $(this).find(".hf-op-select").val() });
+			});
+			mappings[$(this).data("id")] = rows;
+		});
+		return mappings;
+	}
+
+	function loadFieldMap() {
+		$.getJSON('/api/v1/hunt/fields', function(data) {
+			HF_FIELDS       = data.searchable_fields || [];
+			HF_TYPES        = data.types || [];
+			HF_FIELD_TYPES  = data.field_types || {};
+			HF_OPS_BY_TYPE  = data.operators_by_type || {};
+			renderFieldMap(data.mappings || {});
+		}).fail(function() {
+			$("#hf-type-list").html("<span style='color:#ea475b; font-size:12px;'>Failed to load field mapping from API.</span>");
+		});
+	}
+
+	$("#hf-save-btn").click(function() {
+		var $msg = $("#hf-save-msg"), $btn = $(this);
+		$btn.prop("disabled", true);
+		$msg.text("Saving…").removeClass("ok err");
+		$.ajax({
+			type: "POST", url: "/api/v1/hunt/fields", contentType: "application/json",
+			data: JSON.stringify({ mappings: collectFieldMap() }),
+			success: function(resp) { $msg.text("Saved.").addClass("ok").removeClass("err"); if (resp && resp.mappings) renderFieldMap(resp.mappings); },
+			error: function(xhr) { $msg.text("Save failed: " + (xhr.responseText || xhr.status)).addClass("err").removeClass("ok"); },
+			complete: function() { $btn.prop("disabled", false); }
+		});
+	});
+
+	loadHuntSettings();
+	loadFieldMap();
+
+});
+</script>
+
+{{ htPanel.widgetHeader("IOC Hunt — Search Field Mapping", panelId="hunt-fields-panel", panelIcon="fa-project-diagram") }}
+	<div style='font-size:12px; margin-bottom:14px; margin-top:6px; color:#6b8fa8;'>
+		Configure which HX Enterprise Search fields each detected IOC type is searched against when running an IOC Hunt.
+		An IOC type may map to <strong>multiple</strong> fields. The available operators depend on the field's data type —
+		text fields offer <code>contains</code>/<code>starts with</code>/<code>ends with</code>, numeric and date fields offer
+		<code>less than</code>/<code>greater than</code>/<code>between</code>.
+		Settings are stored in a local file (<code>ioc_hunt_fields.json</code>) and can be updated at any time.
+	</div>
+	<div id="hf-type-list" style="min-height:40px;">
+		<span style='color:#6b8fa8; font-size:12px;'>Loading…</span>
+	</div>
+	<div id="hf-save-bar">
+		<button type="button" id="hf-save-btn" class="fe-btn fe-btn--sm fe-btn--primary">
+			<i class="fas fa-save fe-icon--left"></i> Save Field Mapping
+		</button>
+		<span id="hf-save-msg"></span>
+	</div>
+{{ htPanel.widgetFooter() }}
+
+{{ htPanel.widgetHeader("IOC Hunt — Detection Settings", panelId="hunt-settings-panel", panelIcon="fa-search") }}
+	<div style='font-size:12px; margin-bottom:14px; margin-top:6px; color:#6b8fa8;'>
+		Enable or disable IOC types and edit the detection regex patterns used to extract IOCs from pasted text.
+		Use <i class='far fa-clone'></i> to duplicate a regex, <i class='fas fa-times'></i> to delete it.
+	</div>
+	<div id="hunt-type-list" style="min-height:40px;">
+		<span style='color:#6b8fa8; font-size:12px;'>Loading…</span>
+	</div>
+	<div id="hs-save-bar">
+		<button type="button" id="hs-save-btn" class="fe-btn fe-btn--sm fe-btn--primary">
+			<i class="fas fa-save fe-icon--left"></i> Save Detection Settings
+		</button>
+		<span id="hs-save-msg"></span>
+	</div>
+{{ htPanel.widgetFooter() }}
+
+{% endblock %}
