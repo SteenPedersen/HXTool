@@ -5,8 +5,10 @@ HXTool is a web-based, standalone tool that can be used with Trellix Endpoint Se
 
 HXTool provides additional features not directly available in the product by leveraging Trellix Endpoint Security (HX)'s rich API.
 
+Recent releases add an **IOC Hunt** workflow — paste raw threat intel, auto-detect indicator types (hashes, IPs, domains, URLs, registry keys, files, command lines) and launch Enterprise Searches with configurable, per-type search-field mappings. A **Local Catalog** lets you store, organize (into groups), and edit OpenIOC rules, then hunt with them and easily update and move OpenIOC rules between multiple HX servers.
+
 ### Version
-4.8-pre
+26.09
 
 ## Installation
 To install HXTool:
@@ -54,3 +56,4 @@ None so far
 * [Elazar Broad](mailto:elazar.broad@trellix.com)
 * [Matthew Briggs](mailto:matthew.briggs@trellix.com)
 * [Martin Holste](mailto:martin.holste@trellix.com)
+* [Steen Pedersen] (mailto:steen.pedersen@trellix.com)
