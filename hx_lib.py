@@ -1043,6 +1043,7 @@ class HXAPI:
 		(ret, response_code, response_data, response_headers) = self.handle_response(request)
 		return (ret, response_code, response_data)
 
+
 	def restCancelJob(self, path, id):
 
 		request = self.build_request(self.build_api_route(f'{path}/{id}/actions/stop'), method = 'POST')

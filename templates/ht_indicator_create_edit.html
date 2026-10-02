@@ -117,13 +117,20 @@
 		}
 
 		function addElement(myguid, optionalElement) {
+			var valueCell = '<td><textarea class=\'hxtool_rtioc_input fe-input\' style=\'width: 100%; box-sizing: border-box; resize: vertical; min-height: 32px; height: 32px; font-family: monospace; font-size: 12px; overflow-y: hidden;\' maxlength=\'255\' rows=\'1\'></textarea></td>';
+			var row = '<tr data-id=\'' + myguid + '\' id=\'element_' + myguid + '\'><td></td><td></td><td></td><td><input type=\'checkbox\'></td><td><input type=\'checkbox\'></td>' + valueCell + '<td><button class=\'fe-btn fe-btn--sm fe-btn--hxtool-main elementAddButton\' id=\'add_' + myguid + '\'>+</button></td><td><button id=\'delete_' + myguid + '\' class=\'fe-btn fe-btn--sm fe-btn--hxtool-main-remove elementDeleteButton\'>remove<i class=\'fe-icon--right fas fa-trash\'></i></button></td></tr>';
 			//Append row to table
 			if (optionalElement == undefined) {
-				$('#ioctable tbody:last-child').append('<tr data-id=\'' + myguid + '\' id=\'element_' + myguid + '\'><td></td><td></td><td></td><td><input type=\'checkbox\'></td><td><input type=\'checkbox\'></td><td><input class=\'hxtool_rtioc_input fe-input\' style=\'width: 100%; box-sizing: border-box;\' type=\'text\'></td><td><button class=\'fe-btn fe-btn--sm fe-btn--hxtool-main elementAddButton\' id=\'add_' + myguid + '\'>+</button></td><td><button id=\'delete_' + myguid + '\' class=\'fe-btn fe-btn--sm fe-btn--hxtool-main-remove elementDeleteButton\'>remove<i class=\'fe-icon--right fas fa-trash\'></i></button></td></tr>');
+				$('#ioctable tbody:last-child').append(row);
 			}
 			else {
-				$('<tr data-id=\'' + myguid + '\' id=\'element_' + myguid + '\'><td></td><td></td><td></td><td><input type=\'checkbox\'></td><td><input type=\'checkbox\'></td><td><input class=\'hxtool_rtioc_input fe-input\' style=\'width: 100%; box-sizing: border-box;\' type=\'text\'></td><td><button class=\'fe-btn fe-btn--sm fe-btn--hxtool-main elementAddButton\' id=\'add_' + myguid + '\'>+</button></td><td><button id=\'delete_' + myguid + '\' class=\'fe-btn fe-btn--sm fe-btn--hxtool-main-remove elementDeleteButton\'>remove<i class=\'fe-icon--right fas fa-trash\'></i></button></td></tr>').insertAfter($(optionalElement)).closest('tr');
+				$(row).insertAfter($(optionalElement)).closest('tr');
 			}
+		}
+
+		function autoResizeTextarea(el) {
+			el.style.height = 'auto';
+			el.style.height = Math.max(32, el.scrollHeight) + 'px';
 		}
 
 		function renderConditions(myconditions, myioctype, eventspace) {
@@ -141,7 +148,13 @@
 					if (value['preservecase']) {
 						$('#ioctable').closest('table').find('tr:last td:eq(4)').find('input').prop('checked', true);
 					}
-					$('#ioctable').closest('table').find('tr:last td:eq(5)').find('input').val(value['value']);
+					var $valInput = $('#ioctable').closest('table').find('tr:last td:eq(5)').find('.hxtool_rtioc_input');
+					$valInput.val(value['value']);
+					autoResizeTextarea($valInput[0]);
+					if (value['value'] && value['value'].length > 255) {
+						$valInput.css({'border': '2px solid #ea475b', 'background': 'rgba(234,71,91,0.10)'});
+						$valInput.attr('title', 'Value is ' + value['value'].length + ' characters — exceeds the 255-character HX API limit. It will be split automatically on submit if the operator is "matches" with an alternation group, otherwise shorten it manually.');
+					}
 					
 				});
 			});
@@ -258,6 +271,11 @@
 
 			});
 
+			// Auto-resize textarea as user types
+			$('#ioctable').on('input', '.hxtool_rtioc_input', function() {
+				autoResizeTextarea(this);
+			});
+
 			// + button clicked - need to add new element on the next row
 			$('#ioctable').on('click', 'button.elementAddButton', function() {
 				myguid = ($(this).parent().parent().data('id'));
@@ -336,7 +354,7 @@
 						else 
 							{ mycase = false; }
 
-						var mydata = $(this).find('td:eq(5)').find('input').val();
+						var mydata = $(this).find('td:eq(5)').find('.hxtool_rtioc_input').val();
 						// Handle integer types where the operator is between - the type needs to be set to range
 						if (myoper == "between") {
 							mytype = "range";
@@ -345,6 +363,20 @@
 						data[currguid].push(mydict);
 					}
 
+				});
+
+				// Highlight condition values that exceed the 255-char HX API limit.
+				// Submission is not blocked — the backend auto-splits "matches" alternations;
+				// anything it cannot split returns a clear error after submit.
+				$("#ioctable tr").filter(function() {
+					return $(this).attr('id') && $(this).attr('id').startsWith('element_');
+				}).each(function() {
+					var $inp = $(this).find('td:eq(5)').find('.hxtool_rtioc_input');
+					if ($inp.val().length > 255) {
+						$inp.css({'border': '2px solid #ea475b', 'background': 'rgba(234,71,91,0.10)'});
+					} else {
+						$inp.css({'border': '', 'background': ''});
+					}
 				});
 
 				// Post a new indicator (new mode)

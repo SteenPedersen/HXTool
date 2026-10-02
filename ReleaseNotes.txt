@@ -1,7 +1,7 @@
 HXTool Release Notes
 ====================
-Version 26.09
--------------
+Version 26.10.102
+-----------------
 
 LOCAL CATALOG — RULE GROUPS
 ---------------------------

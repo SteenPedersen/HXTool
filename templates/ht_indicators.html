@@ -911,6 +911,10 @@
 			location.href = "/rtioc";
 		});
 
+		$("#lcCreateButton").click(function() {
+			window.location.href = '/rtioc?mode=catalog';
+		});
+
 		$("#addToCatalogButton").click(function() {
 			var indicators = [];
 			ioc_datatable.rows().eq(0).each(function(index) {
@@ -1343,6 +1347,9 @@
 						var html = "";
 						if (uploaded.length > 0) {
 							html += "<p style='color:#4caf50; font-weight:bold; margin-bottom:4px;'>&#10003; Uploaded " + uploaded.length + " rule" + (uploaded.length === 1 ? "" : "s") + " to controller.</p>";
+							if (typeof ioc_datatable !== 'undefined' && ioc_datatable) {
+								ioc_datatable.ajax.reload(null, false);
+							}
 						}
 						if (failed.length > 0) {
 							html += "<p style='color:#ea475b; font-weight:bold; margin-bottom:4px;'>&#10007; Failed: " + failed.length + "</p>";
@@ -1404,11 +1411,6 @@
 					success: refreshCatalogTree,
 					error: hxtoolActionFail
 				});
-			});
-
-			// ── Catalog — Create new rule ─────────────────────────────────
-			$('#lcCreateButton').click(function() {
-				window.location.href = '/rtioc?mode=catalog';
 			});
 
 			// ── Catalog — Import ──────────────────────────────────────────

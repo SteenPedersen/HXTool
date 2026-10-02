@@ -1,5 +1,5 @@
 @import url("/static/hxtool-css/hxtool-grid.css");
-@import url("/static/hxtool-css/hxtool-top-nav.css?v=2");
+@import url("/static/hxtool-css/hxtool-top-nav.css?v=4");
 @import url("/static/hxtool-css/hxtool-table.css?v=2");
 @import url("/static/hxtool-css/hxtool-panel.css");
 @import url("/static/hxtool-css/hxtool-datatables.css?v=2");
@@ -11,7 +11,8 @@
 @import url("/static/hxtool-css/hxtool-rtioc.css");
 
 body {
-	background: #1a1a1a;
+	background: #0a1220;
+	overflow-x: hidden;
 }
 
 select {
@@ -61,15 +62,17 @@ select {
 
 ::-webkit-scrollbar-thumb
 {
-  background: #006b8c;
-  border-top-left-radius: 5px;
-  border-top-right-radius: 5px;
-  border-bottom-left-radius: 5px;
-  border-bottom-right-radius: 5px;
+  background: #1a5f7a;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover
+{
+  background: #0fb8dc;
 }
 
 .mainPlaceHolder {
-	margin: 12px 12px;
+	margin: 4px 12px;
 	min-height: calc(100vh - 84px);
 }
 
@@ -293,7 +296,8 @@ select {
 	width: 100%;
 	padding-left: 0;
 	padding-right: 0;
-	background: #1a1a1a;
+	background: #0a1220;
+	overflow-x: hidden;
 }
 
 .hxtool5_content {
@@ -301,9 +305,59 @@ select {
 	margin: 0;
 	padding-left: 32px;
 	padding-right: 8px;
-	padding-top: 16px;
+	padding-top: 4px;
 	min-height: calc(100vh - 60px);
 	max-height: calc(100vh - 60px);
 	height: 100vh;
+	overflow-x: hidden;
 	overflow-y: scroll;
+}
+
+/* ── Deep navy overrides (post fds-dark.css) ───────────────────────────── */
+
+/* Solid nav bar — was rgba(0,0,0,0.4) */
+.fe-top-nav__topnav .fe-top-nav__bar {
+	background-color: #0a1220 !important;
+}
+
+/* Left bookend — match nav bar, no slash effect */
+.fe-top-nav__bookend--left {
+	background: #0a1220 !important;
+}
+.fe-top-nav__bookend--left:before,
+.fe-top-nav__bookend--left:after {
+	background: #0a1220 !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+/* Right bookend — blend with nav bar, no slash effect */
+.fe-top-nav__bookend--right {
+	background: #0a1220 !important;
+}
+.fe-top-nav__bookend--right:before,
+.fe-top-nav__bookend--right:after {
+	background: #0a1220 !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+
+/* Panels — slightly lighter than body for depth */
+.fe-panel__body {
+	background: #0d1a2b !important;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.35) !important;
+}
+.fe-panel-header {
+	background: #0f1f33 !important;
+	box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
+}
+
+/* Table borders — use softer navy tone */
+.hxtool_table thead td,
+.hxtool_table thead th,
+.hxtool_table tbody td {
+	border-color: rgba(15, 184, 220, 0.2);
+}
+.hxtool_table tbody tr {
+	border-bottom-color: rgba(15, 184, 220, 0.07);
 }

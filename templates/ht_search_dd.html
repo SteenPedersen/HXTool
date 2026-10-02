@@ -51,20 +51,44 @@
 					"<th style='text-align:left; padding:5px 12px; color:rgba(255,255,255,0.45); font-weight:normal; border-bottom:2px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06);'>Value</th>" +
 					"<th style='text-align:left; padding:5px 12px; color:rgba(255,255,255,0.45); font-weight:normal; border-bottom:2px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06);'>Type</th>" +
 					"</tr></thead>";
-				var tb = "<tbody>";
+				// Group consecutive conditions by token.
+				// Same token = OR'd by HX (multiple values for one field).
+				// Different token = AND'd by HX (separate searches OR the fields).
+				var condGroups = [];
 				for (var i = 0; i < conds.length; i++) {
 					var c = conds[i];
-					var stripe = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.10)';
-					var negLabel = c.negate
-						? "<span style='color:#ea475b; font-size:11px; margin-left:4px;'>NOT</span>"
-						: "";
-					var op = c.condition + negLabel;
-					tb += "<tr>" +
-						"<td style='padding:5px 12px 5px 8px; font-family:monospace; font-size:12px; color:#6cb8f0; background:" + stripe + ";'>" + $("<div>").text(c.token).html() + "</td>" +
-						"<td style='padding:5px 12px; font-size:12px; color:rgba(255,255,255,0.7); background:" + stripe + ";'>" + op + "</td>" +
-						"<td style='padding:5px 12px; font-family:monospace; font-size:12px; color:#4caf50; background:" + stripe + ";'>" + $("<div>").text(c.value).html() + "</td>" +
-						"<td style='padding:5px 12px; font-size:11px; color:rgba(255,255,255,0.4); background:" + stripe + ";'>" + $("<div>").text(c.type).html() + "</td>" +
-						"</tr>";
+					if (condGroups.length && condGroups[condGroups.length - 1].token === c.token) {
+						condGroups[condGroups.length - 1].entries.push(c);
+					} else {
+						condGroups.push({ token: c.token, entries: [c] });
+					}
+				}
+				var connectorStyle = 'padding:1px 8px; font-size:11px; font-weight:700; letter-spacing:0.08em;';
+				var tb = "<tbody>";
+				var rowIdx = 0;
+				for (var g = 0; g < condGroups.length; g++) {
+					if (g > 0) {
+						tb += "<tr><td colspan='4' style='" + connectorStyle + " color:#f5a623;'>AND</td></tr>";
+					}
+					var grp = condGroups[g];
+					for (var j = 0; j < grp.entries.length; j++) {
+						if (j > 0) {
+							tb += "<tr><td colspan='4' style='" + connectorStyle + " color:#6cb8f0; padding-left:24px;'>OR</td></tr>";
+						}
+						var c = grp.entries[j];
+						var stripe = rowIdx % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.10)';
+						rowIdx++;
+						var negLabel = c.negate
+							? "<span style='color:#ea475b; font-size:11px; margin-left:4px;'>NOT</span>"
+							: "";
+						var op = c.condition + negLabel;
+						tb += "<tr>" +
+							"<td style='padding:5px 12px 5px 8px; font-family:monospace; font-size:12px; color:#6cb8f0; background:" + stripe + ";'>" + $("<div>").text(c.token).html() + "</td>" +
+							"<td style='padding:5px 12px; font-size:12px; color:rgba(255,255,255,0.7); background:" + stripe + ";'>" + op + "</td>" +
+							"<td style='padding:5px 12px; font-family:monospace; font-size:12px; color:#4caf50; background:" + stripe + ";'>" + $("<div>").text(c.value).html() + "</td>" +
+							"<td style='padding:5px 12px; font-size:11px; color:rgba(255,255,255,0.4); background:" + stripe + ";'>" + $("<div>").text(c.type).html() + "</td>" +
+							"</tr>";
+					}
 				}
 				tb += "</tbody>";
 				$("#conditionsBody").html(

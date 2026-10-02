@@ -6,8 +6,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Full list of HX Enterprise Search "displayable" fields that a query may target.
-# These are the exact field display names accepted by the /hx/api/v3/searches query array.
+# Full list of HX Enterprise Search fields accepted by the /hx/api/v3/searches query array.
+# Sourced from the official OpenAPI spec (lighthouse.json).
 SEARCHABLE_FIELDS = [
     'Application Name',
     'Browser Name',
@@ -38,8 +38,10 @@ SEARCHABLE_FIELDS = [
     'Executable PE Type',
     'Executable Resource Name',
     'File Attributes',
+    'File Bytes Written',
     'File Certificate Issuer',
     'File Certificate Subject',
+    'File Directory',
     'File Download Mime Type',
     'File Download Referrer',
     'File Download Type',
@@ -52,10 +54,11 @@ SEARCHABLE_FIELDS = [
     'File Signature Verified',
     'File Stream Name',
     'File Text Written',
+    'Group Description',
     'Group ID',
     'Group Name',
     'HTTP Header',
-    'Host Set',
+    'HTTP Method',
     'Hostname',
     'INode',
     'IP Address',
@@ -70,12 +73,16 @@ SEARCHABLE_FIELDS = [
     'Port Protocol',
     'Port State',
     'Process Arguments',
+    'Process Event Type',
+    'Process ID',
     'Process Name',
+    'Process Times Executed',
     'Quarantine Event Sender Address',
     'Quarantine Event Sender Name',
     'Registry Key Full Path',
     'Registry Key Value Name',
     'Registry Key Value Text',
+    'Registry Key Value Type',
     'Remote IP Address',
     'Remote Login',
     'Remote Port',
@@ -93,10 +100,10 @@ SEARCHABLE_FIELDS = [
     'Socket Type',
     'Sudo Command',
     'Sudo Command Success',
+    'Syslog Date',
     'Syslog Event ID',
     'Syslog Event Message',
     'Syslog Facility',
-    'Syslog File',
     'Syslog Sender',
     'Syslog Severity Level',
     'Task Flag',
@@ -113,24 +120,28 @@ SEARCHABLE_FIELDS = [
     'Timestamp - Modified',
     'Timestamp - Started',
     'URL',
+    'User Full Name',
+    'User Password Age',
     'Username',
+    'Username (Creator)',
     'Web Page Origin URL',
     'Web Page Title',
+    'Web Page Visit Type',
+    'Windows Event Category',
     'Windows Event ID',
     'Windows Event Log Type',
     'Windows Event Message',
+    'Windows Event Type',
 ]
 
-# All operators supported for a hunt field condition (union across field types). These
-# strings are passed straight through as the "operator" value in the HX /searches query
-# array. If a controller rejects one of these spellings, this is the single place to fix it.
+# All operators supported for a hunt field condition, as per the official HX OpenAPI spec.
+# These strings are passed straight through as the "operator" value in the HX /searches
+# query array. This is the single place to correct them if HX rejects a spelling.
 HUNT_OPERATORS = [
     'equals',
     'not equals',
     'contains',
     'not contains',
-    'starts with',
-    'ends with',
     'less than',
     'greater than',
     'between',
@@ -139,7 +150,7 @@ HUNT_OPERATORS = [
 # Which operators make sense per field data type. String fields get substring operators;
 # numeric/date fields get comparison operators; booleans only equality.
 OPERATORS_BY_TYPE = {
-    'string':  ['equals', 'not equals', 'contains', 'not contains', 'starts with', 'ends with'],
+    'string':  ['equals', 'not equals', 'contains', 'not contains'],
     'integer': ['equals', 'not equals', 'less than', 'greater than', 'between'],
     'date':    ['equals', 'not equals', 'less than', 'greater than', 'between'],
     'bool':    ['equals', 'not equals'],
@@ -150,25 +161,30 @@ OPERATORS_BY_TYPE = {
 # Drives which operators the UI offers and what save validation accepts.
 FIELD_TYPES = {
     # integers
+    'File Bytes Written': 'integer',
+    'Group ID': 'integer',
+    'INode': 'integer',
     'Local Port': 'integer',
     'Port': 'integer',
+    'Process ID': 'integer',
+    'Process Times Executed': 'integer',
     'Remote Port': 'integer',
-    'Size in bytes': 'integer',
     'Session Length': 'integer',
+    'Size in bytes': 'integer',
     'Syslog Event ID': 'integer',
     'Syslog Severity Level': 'integer',
+    'User Password Age': 'integer',
     'Windows Event ID': 'integer',
-    'INode': 'integer',
-    'Group ID': 'integer',
     # booleans
+    'Driver Module In-Tree': 'bool',
     'Executable Injected': 'bool',
     'File Signature Exists': 'bool',
     'File Signature Verified': 'bool',
     'Login Failed': 'bool',
-    'Sudo Command Success': 'bool',
     'Remote Login': 'bool',
-    'Driver Module In-Tree': 'bool',
+    'Sudo Command Success': 'bool',
     # dates
+    'Syslog Date': 'date',
     'Timestamp - Accessed': 'date',
     'Timestamp - Changed': 'date',
     'Timestamp - Created': 'date',
@@ -258,8 +274,7 @@ HUNT_TYPES = [
          r'\b([A-Za-z0-9_\-]+\.(?:exe|dll|msi|bat|ps1|sh|py|vbs|cmd|scr|pif|jar|hta|js|wsf|lnk|sys|drv))\b',
      ],
      'query_fields': [
-         {'field': 'File Name', 'operator': 'contains'},
-         {'field': 'Process Name', 'operator': 'contains'},
+         {'field': 'File Full Path', 'operator': 'contains'},
      ]},
     {'id': 'cmdline', 'name': 'Command Line', 'normalizer': 'dirpath',
      'regexes': [
@@ -344,18 +359,21 @@ def detect_ioc_type(value: str, forced_id: Optional[str] = None) -> Optional[dic
     return None
 
 
-def ioc_group_to_query_array(ioc_type_id: str, values: list) -> Optional[list]:
-    """Build HX query array for POST /hx/api/v3/searches.
-    Returns None if the type has no query_fields or no values.
-    Each value x each query_field produces one {'field','operator','value'} entry.
+def ioc_group_to_query_array(ioc_type_id: str, values: list) -> list:
+    """Build per-field query arrays for POST /hx/api/v3/searches.
+    Returns list of {'field': str, 'query': list} dicts, one per configured search field.
+    Multiple values for the same field are OR'd by HX within one query array.
+    Different fields must be separate searches — putting them in one query AND's them
+    across event item types, making matches impossible.
+    Returns [] if the type has no query_fields or values is empty.
     """
     if ioc_type_id not in HUNT_TYPE_BY_ID or not values:
-        return None
+        return []
     query_fields = get_query_fields(ioc_type_id)
     if not query_fields:
-        return None
-    query = []
-    for val in values:
-        for qf in query_fields:
-            query.append({'field': qf['field'], 'operator': qf['operator'], 'value': str(val)})
-    return query or None
+        return []
+    result = []
+    for qf in query_fields:
+        query = [{'field': qf['field'], 'operator': qf['operator'], 'value': str(val)} for val in values]
+        result.append({'field': qf['field'], 'query': query})
+    return result

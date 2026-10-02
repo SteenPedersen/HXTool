@@ -835,7 +835,17 @@ def _hx_error_message(response_data, response_code=None):
 			if response_data.get('message'):
 				return response_data['message']
 		elif isinstance(response_data, str) and response_data.strip():
-			return response_data.strip()
+			text = response_data.strip()
+			# Non-JSON HTML body = the HX reverse proxy / WAF rejected the request
+			# (e.g. nginx 403) rather than the HX API. Collapse it to a concise message.
+			if '<html' in text.lower() or '<!doctype' in text.lower():
+				m = re.search(r'<title>(.*?)</title>', text, re.IGNORECASE | re.DOTALL)
+				title = re.sub(r'\s+', ' ', m.group(1)).strip() if m else 'Request rejected'
+				base = f'HTTP {response_code}: ' if response_code else ''
+				return (base + title + ' — rejected by the HX server/proxy (often a WAF or '
+					'content filter). This commonly happens when a search value contains a '
+					'full URL; the other IOC types in the same hunt are unaffected.')
+			return text
 	except Exception:
 		pass
 	return f'HX API error{(" (HTTP " + str(response_code) + ")") if response_code else ""}.'
@@ -859,42 +869,52 @@ def hxtool_api_hunt_submit(hx_api_object):
 	# type, so different IOC types (hash vs network vs registry ...) cannot be combined
 	# into one search. We submit one search per IOC type. For run-now hunts we call HX
 	# synchronously so per-type errors (e.g. invalid field combination) surface in the UI.
+	# HX query array: same-field entries are OR'd; different fields are AND'd.
+	# To achieve OR across fields, submit one search per field. Each search's
+	# values for that field are OR'd by HX within the single query array.
 	created, results = 0, []
 	for group in groups:
 		type_id = group.get('typeId', '')
 		values = group.get('values', [])
-		displayname = f'HUNT_{type_id}_{timestamp}'
-		query = ioc_group_to_query_array(type_id, values) if values else None
-		if not query:
-			results.append({'typeId': type_id, 'displayname': displayname, 'ok': False,
-				'error': 'No searchable fields configured for this IOC type.'})
+		per_field = ioc_group_to_query_array(type_id, values) if values else []
+		if not per_field:
+			results.append({'typeId': type_id, 'field': '', 'displayname': f'HUNT_{type_id}_{timestamp}',
+				'ok': False, 'error': 'No searchable fields configured for this IOC type.'})
 			continue
 
-		if run_now:
-			(ret, response_code, response_data) = hx_api_object.restSubmitQuerySearch(query, hostset_id, displayname=displayname)
-			if ret:
-				search_id = None
-				try:
-					search_id = response_data.get('data', {}).get('_id')
-				except Exception:
-					pass
+		for fq in per_field:
+			field = fq['field']
+			query = fq['query']
+			field_slug = field.replace(' ', '_')
+			displayname = f'HUNT_{type_id}_{field_slug}_{timestamp}'
+
+			if run_now:
+				(ret, response_code, response_data) = hx_api_object.restSubmitQuerySearch(query, hostset_id, displayname=displayname)
+				if ret:
+					search_id = None
+					try:
+						search_id = response_data.get('data', {}).get('_id')
+					except Exception:
+						pass
+					hxtool_global.hxtool_db.huntQueryCreate(displayname, query)
+					created += 1
+					results.append({'typeId': type_id, 'field': field, 'displayname': displayname, 'ok': True,
+						'search_id': search_id, 'hx_raw': response_data, 'hx_code': response_code})
+				else:
+					results.append({'typeId': type_id, 'field': field, 'displayname': displayname, 'ok': False,
+						'error': _hx_error_message(response_data, response_code),
+						'hx_raw': response_data, 'hx_code': response_code})
+			else:
+				task = hxtool_scheduler_task(session['ht_profileid'], 'Hunt Task', start_time=start_time)
+				if schedule:
+					task.set_schedule(**schedule)
+				task.add_step(hunt_search_task_module, kwargs={
+					'query': query, 'hostset_id': hostset_id, 'displayname': displayname,
+				})
+				hxtool_global.hxtool_scheduler.add(task)
 				hxtool_global.hxtool_db.huntQueryCreate(displayname, query)
 				created += 1
-				results.append({'typeId': type_id, 'displayname': displayname, 'ok': True, 'search_id': search_id})
-			else:
-				results.append({'typeId': type_id, 'displayname': displayname, 'ok': False,
-					'error': _hx_error_message(response_data, response_code)})
-		else:
-			task = hxtool_scheduler_task(session['ht_profileid'], 'Hunt Task', start_time=start_time)
-			if schedule:
-				task.set_schedule(**schedule)
-			task.add_step(hunt_search_task_module, kwargs={
-				'query': query, 'hostset_id': hostset_id, 'displayname': displayname,
-			})
-			hxtool_global.hxtool_scheduler.add(task)
-			hxtool_global.hxtool_db.huntQueryCreate(displayname, query)
-			created += 1
-			results.append({'typeId': type_id, 'displayname': displayname, 'ok': True, 'scheduled': True})
+				results.append({'typeId': type_id, 'field': field, 'displayname': displayname, 'ok': True, 'scheduled': True})
 
 	failed = [r['typeId'] for r in results if not r['ok']]
 	app.logger.info(format_activity_log(msg="hunt submit", action="new", count=created, user=session['ht_user'], controller=session['hx_ip']))
@@ -2512,14 +2532,16 @@ def hxtool_api_indicators_new(hx_api_object):
 				(iocguid, ioctype) = key.split("_")
 				mytests = {"tests": []}
 				for entry in value:
-					if not entry['negate'] and not entry['case']:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data']})
-					elif entry['negate'] and not entry['case']:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data'], "negate": True})
-					elif entry['case'] and not entry['negate']:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data'], "preservecase": True})
-					else:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data'], "negate": True, "preservecase": True})
+					t = {"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data']}
+					if entry['negate']:
+						t['negate'] = True
+					if entry['case']:
+						t['preservecase'] = True
+					try:
+						mytests['tests'].extend(_split_long_condition(t))
+					except ValueError as split_err:
+						hx_api_object.restDeleteIndicator(ioc_category, ioc_guid)
+						return (str(split_err), 400)
 
 				cond_path = hx_api_object.build_api_route(f'indicators/{ioc_category}/{ioc_guid}/conditions/{ioctype}')
 				cond_url = f'https://{hx_api_object.hx_host}:{hx_api_object.hx_port}{cond_path}'
@@ -2573,20 +2595,22 @@ def hxtool_api_indicators_edit(hx_api_object):
 				(iocguid, ioctype) = key.split("_")
 				mytests = {"tests": []}
 				for entry in value:
-					if not entry['negate'] and not entry['case']:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data']})
-					elif entry['negate'] and not entry['case']:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data'], "negate": True})
-					elif entry['case'] and not entry['negate']:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data'], "preservecase": True})
-					else:
-						mytests['tests'].append({"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data'], "negate": True, "preservecase": True})
+					t = {"token": entry['group'] + "/" + entry['field'], "type": entry['type'], "operator": entry['operator'], "value": entry['data']}
+					if entry['negate']:
+						t['negate'] = True
+					if entry['case']:
+						t['preservecase'] = True
+					try:
+						mytests['tests'].extend(_split_long_condition(t))
+					except ValueError as split_err:
+						hx_api_object.restDeleteIndicator(mycategory, myNewURI)
+						return (str(split_err), 400)
 
 				(ret, response_code, response_data) = hx_api_object.restAddCondition(mycategory, myNewURI, ioctype, json.dumps(mytests))
 				if not ret:
-					# Condition was not added successfully set state to False to prevent the original indicator from being removed
+					hx_err = _hx_error_detail(response_data)
 					myState = False
-					return('failed to create indicator conditions, check your conditions', 500)
+					return (f'Failed to create indicator conditions. HX API: {hx_err}', 500)
 		# Everything is OK
 		if myState:
 			# Remove the original indicator
@@ -3978,8 +4002,11 @@ def hxtool_api_enterprise_search_detail(hx_api_object):
 	conditions = _parse_ioc_conditions(indicator_b64)
 
 	if not conditions:
-		# Query-based searches: HX may return the query array at top-level or in settings
+		# Query-based searches: HX returns 'query' array or (for future use) 'filter.children'
 		raw_query = s.get('query') or settings.get('query') or []
+		if not raw_query:
+			flt = s.get('filter') or settings.get('filter') or {}
+			raw_query = flt.get('children', []) if isinstance(flt, dict) else []
 		if not raw_query:
 			# Fall back to conditions stored in HXTool DB at submission time
 			stored = hxtool_global.hxtool_db.huntQueryGet(displayname)
@@ -3991,7 +4018,7 @@ def hxtool_api_enterprise_search_detail(hx_api_object):
 				# Stored as conditions list (local-catalog hunt)
 				conditions.append(q)
 			elif 'field' in q:
-				# Stored as query array (IOC hunt)
+				# Stored as query array / OR-filter (IOC hunt)
 				conditions.append({
 					'token':     q.get('field', ''),
 					'condition': q.get('operator', 'equals'),
@@ -4800,6 +4827,99 @@ def x15_analysis_auditdata(hx_api_object):
 		return make_response_by_code(400)
 
 #######################
+
+
+def _split_long_condition(test, max_len=255):
+    """
+    Return a list of test dicts. If the value fits in max_len chars, returns [test].
+    If it is too long and the operator is 'matches' with a top-level alternation group
+    (prefix)(a|b|c)(suffix), splits the alternatives into groups each fitting within
+    max_len and returns multiple tests.
+
+    For negated tests this is safe by De Morgan: NOT(A|B|C) == NOT A AND NOT B AND NOT C.
+    For non-negated matches with alternation this would AND the groups (wrong), so a
+    ValueError is raised for the caller to surface as a user-visible error.
+
+    Raises ValueError for values that are too long but cannot be safely split.
+    """
+    import re as _re
+    value = test.get('value', '')
+    if len(value) <= max_len:
+        return [test]
+
+    operator = test.get('operator', '')
+    token = test.get('token', '?')
+
+    if operator != 'matches':
+        raise ValueError(
+            f'Condition value for "{token}" is {len(value)} characters (limit {max_len}). '
+            f'Operator "{operator}" values cannot be automatically shortened — '
+            f'please shorten the value manually before cloning.'
+        )
+
+    if not test.get('negate'):
+        raise ValueError(
+            f'Condition value for "{token}" is {len(value)} characters (limit {max_len}). '
+            f'Non-negated matches conditions with long alternations cannot be safely split '
+            f'automatically — please shorten the regex manually.'
+        )
+
+    # Find all top-level (non-nested) alternation groups and try each as the split point,
+    # preferring the group with the most alternatives (most likely to be the cause).
+    groups_found = list(_re.finditer(r'\(([^()]+)\)', value))
+    if not groups_found:
+        raise ValueError(
+            f'Condition value for "{token}" is {len(value)} characters (limit {max_len}). '
+            f'No simple alternation group found to split — please shorten the regex manually.'
+        )
+
+    # Sort by number of alternatives descending so we try the most-splittable group first
+    groups_found.sort(key=lambda g: -g.group(1).count('|'))
+
+    for grp_match in groups_found:
+        alts_str = grp_match.group(1)
+        span_start, span_end = grp_match.start(), grp_match.end()
+        prefix = value[:span_start]
+        suffix = value[span_end:]
+        alternatives = alts_str.split('|')
+
+        if len(alternatives) < 2:
+            continue
+
+        # Pack alternatives greedily into groups each fitting within max_len
+        bucket_groups = []
+        current = []
+        for alt in alternatives:
+            candidate = current + [alt]
+            if len(f"{prefix}({'|'.join(candidate)}){suffix}") > max_len and current:
+                bucket_groups.append(current)
+                current = [alt]
+            else:
+                current = candidate
+        if current:
+            bucket_groups.append(current)
+
+        if len(bucket_groups) > 1 and all(
+            len(f"{prefix}({'|'.join(g)}){suffix}") <= max_len for g in bucket_groups
+        ):
+            return [dict(test, value=f"{prefix}({'|'.join(g)}){suffix}") for g in bucket_groups]
+
+    raise ValueError(
+        f'Condition value for "{token}" is {len(value)} characters (limit {max_len}). '
+        f'Could not automatically split the regex to fit — please shorten it manually.'
+    )
+
+
+def _validate_condition_tests(tests, ioctype):
+    """Return an error string if any test value exceeds the HX 255-char limit, else None."""
+    for t in tests:
+        val = t.get('value', '')
+        if isinstance(val, str) and len(val) > 255:
+            token = t.get('token', 'unknown field')
+            return (f'Condition value for "{token}" ({ioctype}) is {len(val)} characters, '
+                    f'but the HX API only accepts values up to 255 characters. '
+                    f'Value starts with: {val[:60]!r}')
+    return None
 
 
 def _hx_error_detail(response_data):

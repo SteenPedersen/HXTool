@@ -1,23 +1,28 @@
 /* HXTool Top Navigation bar */
 
 .hxtool_topnav_dropdown {
-	background: rgba(0, 0, 0, 0.6) !important;
+	background: #0d1a2b !important;
+	border: 1px solid rgba(15, 184, 220, 0.15);
+	border-radius: 4px;
 	position: absolute;
-	box-shadow: 0 0.5px 5px 0 rgba(0, 0, 0, 0.25);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
 	display: none;
 	z-index: 50 !important;
+	min-width: 180px;
+	padding: 4px 0;
 }
 
 .hxtool_topnav_dropdown_child {
 	width: 100%;
-	color: #0fb8dc;
+	color: #8ecfe8;
 	text-align: left;
 	background: transparent;
 	border: 0;
+	transition: background 0.12s, color 0.12s;
 }
 
 .hxtool_topnav_dropdown_child:hover {
-	background: rgba(0, 0, 0, 0.6);
+	background: rgba(15, 184, 220, 0.10);
 	color: #66ebff !important;
 }
 
@@ -35,29 +40,33 @@
 .hxtool_topnav_dropdown_divider {
 	width: 100%;
 	margin-right: 0px;
-	border-top: 1px solid;
+	border-top: 1px solid rgba(15, 184, 220, 0.15);
 	height: 16px;
 	padding-bottom: 0px;
 	padding-left: 8px;
-	font-size: 12px;
-	color: #b3cacf;
+	font-size: 11px;
+	color: rgba(15, 184, 220, 0.5);
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
 }
 
 .hxtool_topnav_mainbutton {
 	background: transparent;
-	color: #0fb8dc;
+	color: rgba(255, 255, 255, 0.9);
 	border: 0;
+	transition: background 0.12s, color 0.12s;
+	border-radius: 3px;
 }
 
 button.hxtool_topnav_mainbutton:hover {
-	background: rgba(0, 0, 0, 0.6);
-	color: #66ebff !important;
+	background: rgba(15, 184, 220, 0.12);
+	color: #0fb8dc !important;
 }
 
 .ht-ctrl-profile-btn {
 	display: block;
 	width: 100%;
-	color: #0fb8dc;
+	color: #8ecfe8;
 	text-align: left;
 	background: transparent;
 	border: 0;
@@ -65,9 +74,10 @@ button.hxtool_topnav_mainbutton:hover {
 	font-size: 14px;
 	cursor: pointer;
 	white-space: nowrap;
+	transition: background 0.12s, color 0.12s;
 }
 
 .ht-ctrl-profile-btn:hover {
-	background: rgba(0, 0, 0, 0.6);
+	background: rgba(15, 184, 220, 0.10);
 	color: #66ebff !important;
 }	
