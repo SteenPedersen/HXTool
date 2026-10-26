@@ -99,13 +99,23 @@ class hxtool_config:
 			if handler_name == 'rotating_file_handler':
 				handler_config = self._config['log_handlers'][handler_name]
 				if 'file' in handler_config:
-					h = logging.handlers.RotatingFileHandler(combine_app_path(handler_config['file']))
-					
+					log_path = combine_app_path(handler_config['file'])
+					try:
+						h = logging.handlers.RotatingFileHandler(log_path)
+					except (PermissionError, OSError) as e:
+						print(
+							f"\nERROR: Cannot open log file: {log_path}\n"
+							f"  {e}\n\n"
+							"  Fix: create the log directory and grant write permission, or\n"
+							"       run HXTool from a directory where your user has write access.\n"
+						)
+						raise SystemExit(1)
+
 					if 'max_bytes' in handler_config:
 						h.maxBytes = handler_config['max_bytes']
 					if 'backup_count' in handler_config:
 						h.backupCount = handler_config['backup_count']
-					
+
 					self._set_level_and_format(handler_config, h)
 					yield(h)
 					

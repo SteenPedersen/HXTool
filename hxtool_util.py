@@ -50,14 +50,19 @@ def get_N_HexCol(N=5):
 def valid_session_required(f):
 	@wraps(f)
 	def is_session_valid(*args, **kwargs):
-		ret = redirect(url_for('login', redirect_uri = request.full_path))	
+		ret = redirect(url_for('login', redirect_uri = request.full_path))
 		if (session and 'ht_user' in session and 'ht_api_object' in session):
 			o = HXAPI.deserialize(session['ht_api_object'])
 			if o.restIsSessionValid():
 				kwargs['hx_api_object'] = o
+				original_serialized = session['ht_api_object']
 				ret = f(*args, **kwargs)
-				session['ht_api_object'] = o.serialize()
-				return ret	
+				# Only write back the (possibly token-refreshed) old object if the
+				# handler didn't replace it — e.g. profile_switch() replaces it with
+				# a new server's object and we must not overwrite that.
+				if session.get('ht_api_object') == original_serialized:
+					session['ht_api_object'] = o.serialize()
+				return ret
 			else:
 				logger.warning("The HX API token for the current session has expired, redirecting to the login page.")
 		return ret

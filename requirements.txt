@@ -4,3 +4,5 @@ pycryptodomex
 tinydb>=3.15.2
 pandas
 keyring
+gunicorn
+# pymongo  # optional: only required when db.type = "mongodb" in config
